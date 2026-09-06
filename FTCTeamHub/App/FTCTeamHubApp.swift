@@ -2,13 +2,14 @@
 //  FTCTeamHubApp.swift
 //  FTCTeamHub
 //
-//  App entry point. Owns the single SwiftData ModelContainer, injects the
-//  FTCScout API client into the environment, and routes between LoginView
-//  and MainTabView via ContentView based on AuthenticationManager state.
+//  App entry point. Owns the SwiftData ModelContainer, configures Firebase
+//  for cross-device sync, injects the FTCScout API client + sync service
+//  into the environment, and routes between LoginView and MainTabView.
 //
 
 import SwiftUI
 import SwiftData
+import FirebaseCore
 
 @main
 struct FTCTeamHubApp: App {
@@ -23,26 +24,47 @@ struct FTCTeamHubApp: App {
     }()
 
     private let scoutAPI: FTCScoutAPIServicing = LiveFTCScoutAPIClient()
+    private let syncService = FirebaseSyncService()
+
+    init() {
+        // Requires FTCTeamHub/GoogleService-Info.plist from your own
+        // Firebase project — see FIREBASE_SETUP.md. Safe to call even if
+        // the plist is a placeholder during initial development; network
+        // calls will simply fail gracefully until it's a real project.
+        FirebaseApp.configure()
+    }
 
     var body: some Scene {
         WindowGroup {
             ContentView()
                 .environment(\.ftcScoutAPI, scoutAPI)
+                .environment(\.syncService, syncService)
+                .onAppear {
+                    syncService.start(modelContext: container.mainContext)
+                }
         }
         .modelContainer(container)
     }
 }
 
-// MARK: - Environment key for the FTCScout API client
+// MARK: - Environment keys
 
 private struct FTCScoutAPIKey: EnvironmentKey {
     static let defaultValue: FTCScoutAPIServicing = LiveFTCScoutAPIClient()
+}
+
+private struct SyncServiceKey: EnvironmentKey {
+    static let defaultValue: FirebaseSyncService? = nil
 }
 
 extension EnvironmentValues {
     var ftcScoutAPI: FTCScoutAPIServicing {
         get { self[FTCScoutAPIKey.self] }
         set { self[FTCScoutAPIKey.self] = newValue }
+    }
+    var syncService: FirebaseSyncService? {
+        get { self[SyncServiceKey.self] }
+        set { self[SyncServiceKey.self] = newValue }
     }
 }
 
@@ -106,7 +128,7 @@ struct MainTabView: View {
 #Preview {
     let container = makePreviewContainer()
     let authManager = AuthenticationManager(modelContext: container.mainContext)
-    return MainTabView()
+    MainTabView()
         .modelContainer(container)
         .environment(authManager)
         .environment(\.ftcScoutAPI, LiveFTCScoutAPIClient())
