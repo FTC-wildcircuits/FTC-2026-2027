@@ -2,10 +2,9 @@
 //  FTCTeamHubApp.swift
 //  FTCTeamHub
 //
-//  App entry point. Wires the SwiftData ModelContainer and the backend
-//  services into the environment so every child view gets dependency
-//  injection for free via @Environment / @EnvironmentObject — no
-//  singleton reach-through from Views.
+//  App entry point. Owns the single SwiftData ModelContainer, injects the
+//  FTCScout API client into the environment, and routes between LoginView
+//  and MainTabView via ContentView based on AuthenticationManager state.
 //
 
 import SwiftUI
@@ -17,26 +16,24 @@ struct FTCTeamHubApp: App {
     let container: ModelContainer = {
         let schema = Schema([
             AppUser.self, TaskItem.self, NotebookEntry.self,
-            ScoutingRecord.self, PicklistEntry.self, Idea.self, ActivityEvent.self
+            TestRunRecord.self, Idea.self, ActivityEvent.self, TrackedTeam.self
         ])
         let config = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
         return try! ModelContainer(for: schema, configurations: [config])
     }()
 
-    @StateObject private var backend = MockBackendService.shared
     private let scoutAPI: FTCScoutAPIServicing = LiveFTCScoutAPIClient()
 
     var body: some Scene {
         WindowGroup {
-            RootContainerView()
-                .environmentObject(backend)
+            ContentView()
                 .environment(\.ftcScoutAPI, scoutAPI)
         }
         .modelContainer(container)
     }
 }
 
-// MARK: - Environment key for the API client (protocol-typed, swappable in previews)
+// MARK: - Environment key for the FTCScout API client
 
 private struct FTCScoutAPIKey: EnvironmentKey {
     static let defaultValue: FTCScoutAPIServicing = LiveFTCScoutAPIClient()
@@ -49,108 +46,68 @@ extension EnvironmentValues {
     }
 }
 
-// MARK: - Root: gates the whole app behind sign-in, then shows the TabView
+// MARK: - Root router
 
-struct RootContainerView: View {
-    @EnvironmentObject private var backend: MockBackendService
+struct ContentView: View {
+    @Environment(\.modelContext) private var modelContext
+    @State private var authManager: AuthenticationManager?
 
     var body: some View {
         Group {
-            if backend.currentUser != nil {
-                MainTabView()
+            if let authManager {
+                if authManager.currentUser != nil {
+                    MainTabView()
+                        .environment(authManager)
+                        .transition(.opacity)
+                } else {
+                    LoginView()
+                        .environment(authManager)
+                        .transition(.opacity)
+                }
             } else {
-                SignInView()
+                ProgressView()
             }
         }
-        .animation(.easeInOut(duration: 0.2), value: backend.currentUser != nil)
-    }
-}
-
-// MARK: - Sign-in (stand-in for Firebase/Supabase/CloudKit auth UI)
-
-struct SignInView: View {
-    @EnvironmentObject private var backend: MockBackendService
-    @State private var name = ""
-    @State private var role: TeamRole = .software
-    @State private var teamNumber = ""
-    @State private var isSigningIn = false
-    @State private var errorMessage: String?
-
-    var body: some View {
-        NavigationStack {
-            Form {
-                Section("Your Identity") {
-                    TextField("Full name", text: $name)
-                        .textContentType(.name)
-                    Picker("Role", selection: $role) {
-                        ForEach(TeamRole.allCases) { r in
-                            Label(r.rawValue, systemImage: r.systemImage).tag(r)
-                        }
-                    }
-                    TextField("Team number", text: $teamNumber)
-                        .keyboardType(.numberPad)
-                }
-                if let errorMessage {
-                    Section { Text(errorMessage).foregroundStyle(.red).font(.footnote) }
-                }
+        .animation(.easeInOut(duration: 0.2), value: authManager?.currentUser?.id)
+        .onAppear {
+            if authManager == nil {
+                authManager = AuthenticationManager(modelContext: modelContext)
             }
-            .navigationTitle("Sign In")
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button {
-                        signIn()
-                    } label: {
-                        if isSigningIn { ProgressView() } else { Text("Continue") }
-                    }
-                    .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty || teamNumber.isEmpty || isSigningIn)
-                }
-            }
-        }
-    }
-
-    private func signIn() {
-        guard let teamNum = Int(teamNumber) else {
-            errorMessage = "Team number must be numeric."
-            return
-        }
-        isSigningIn = true
-        Task {
-            do {
-                _ = try await backend.signIn(name: name, role: role, teamNumber: teamNum)
-            } catch {
-                errorMessage = error.localizedDescription
-            }
-            isSigningIn = false
         }
     }
 }
 
-// MARK: - Main TabView (mandate #3: five core modules)
+// MARK: - Main TabView — six modules
 
 struct MainTabView: View {
     var body: some View {
         TabView {
-            ScoutingTabView()
-                .tabItem { Label("Scouting", systemImage: "chart.bar.xaxis") }
+            RosterTabView()
+                .tabItem { Label("Roster", systemImage: "person.3.fill") }
+
+            TestingTabView()
+                .tabItem { Label("Testing", systemImage: "gauge.with.dots.needle.67percent") }
 
             TasksTabView()
                 .tabItem { Label("Tasks", systemImage: "checklist") }
 
             NotebookTabView()
-                .tabItem { Label("Notebook", systemImage: "book.closed") }
+                .tabItem { Label("Notebook", systemImage: "book.closed.fill") }
 
             IdeasTabView()
-                .tabItem { Label("Ideas", systemImage: "lightbulb") }
+                .tabItem { Label("Ideas", systemImage: "lightbulb.fill") }
 
-            ActivityTabView()
-                .tabItem { Label("Activity", systemImage: "waveform.path.ecg") }
+            LiveDataTabView()
+                .tabItem { Label("Live Data", systemImage: "antenna.radiowaves.left.and.right") }
         }
-        // Native tint — no custom brand color forced over system accent,
-        // per the "no forced dark/light / native aesthetic" mandate.
     }
 }
 
 #Preview {
-    RootContainerView()
-        .environmentObject(MockBackendService.shared)
+    let container = makePreviewContainer()
+    let authManager = AuthenticationManager(modelContext: container.mainContext)
+    return MainTabView()
+        .modelContainer(container)
+        .environment(authManager)
+        .environment(\.ftcScoutAPI, LiveFTCScoutAPIClient())
 }
