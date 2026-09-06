@@ -1,17 +1,17 @@
 # .github/workflows/build-unsigned-ipa.yml
 #
-# Builds FTCTeamHub entirely on a GitHub-hosted macOS runner — no local
-# Mac needed. Produces an UNSIGNED .ipa as a downloadable artifact.
-# AltServer signs it with your personal Apple ID at sideload time, exactly
-# like any other AltStore installation.
+# Builds FTCTeamHub entirely on a GitHub-hosted macOS runner. Produces an
+# UNSIGNED .ipa as a downloadable artifact. AltServer signs it with your
+# personal Apple ID at sideload time.
 #
-# Fix vs. previous version: we no longer hardcode a specific Xcode version
-# (e.g. Xcode_15.4.app). GitHub's macOS runner images change which Xcode
-# versions are preinstalled over time, and a mismatch between the Xcode
-# used to GENERATE the project (xcodegen) and the Xcode used to BUILD it
-# causes "future Xcode project file format" errors. Instead we detect and
-# select the newest Xcode actually present on the runner, once, and use
-# that same selection for every subsequent step.
+# CHANGE: added `-quiet` to the xcodebuild invocation. Without it, Xcode
+# prints every single compiler flag for every one of Firebase's ~40
+# sub-targets (leveldb, gRPC, abseil, nanopb, etc.) — multiple MEGABYTES of
+# noise per run — which buries the one or two lines that actually matter
+# when something fails. `-quiet` suppresses that noise and only shows
+# warnings/errors, so if this fails again, the log will actually be
+# readable instead of a multi-million-character wall of -fmodule-map-file
+# flags.
 
 name: Build Unsigned IPA
 
@@ -52,6 +52,7 @@ jobs:
             -sdk iphoneos \
             -configuration Release \
             -derivedDataPath build/DerivedData \
+            -quiet \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY="" \
