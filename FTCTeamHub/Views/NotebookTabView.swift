@@ -2,15 +2,9 @@
 //  NotebookTabView.swift
 //  FTCTeamHub
 //
-//  TAB 4 — Engineering Notebook. Markdown entries with FTC-specific
-//  structured templates, author stamping from the active session, and a
-//  one-tap PDF export suitable for handing to Inspire Award judges.
-//
-//  Syntax notes carried over from a previous CI failure and deliberately
-//  avoided here: every `@State` gets its own line (a property wrapper
-//  cannot attach to a comma-separated variable list), and no `specifier:`
-//  interpolation is used outside of `Text(_:)` — `String(format:)` is used
-//  wherever a plain String is required (e.g. LabeledContent values, PDF text).
+//  NEW: saving a notebook entry now calls syncService?.pushNotebookEntry(...)
+//  and syncService?.pushActivity(...) so entries actually sync across
+//  devices instead of staying local-only.
 //
 
 import SwiftUI
@@ -132,9 +126,6 @@ private struct IdentifiableURL: Identifiable {
     var id: URL { url }
 }
 
-/// Thin UIKit bridge for the system share sheet — SwiftUI's own `ShareLink`
-/// works for simple cases, but wrapping `UIActivityViewController` directly
-/// keeps this reusable for the freshly-generated PDF file URL.
 private struct ShareSheet: UIViewControllerRepresentable {
     let activityItems: [Any]
     func makeUIViewController(context: Context) -> UIActivityViewController {
@@ -190,11 +181,11 @@ private struct IMULogCard: View {
     }
 }
 
-// MARK: - PDF export (for Inspire Award judges)
+// MARK: - PDF export
 
 enum NotebookPDFExporter {
     static func export(entry: NotebookEntry) -> URL? {
-        let pageWidth: CGFloat = 612   // US Letter, 72 dpi
+        let pageWidth: CGFloat = 612
         let pageHeight: CGFloat = 792
         let margin: CGFloat = 48
         let contentWidth = pageWidth - margin * 2
@@ -206,27 +197,20 @@ enum NotebookPDFExporter {
         do {
             try renderer.writePDF(to: url) { context in
                 context.beginPage()
-
                 var cursorY: CGFloat = margin
 
-                let titleAttrs: [NSAttributedString.Key: Any] = [
-                    .font: UIFont.boldSystemFont(ofSize: 22)
-                ]
-                let title = entry.title as NSString
-                title.draw(at: CGPoint(x: margin, y: cursorY), withAttributes: titleAttrs)
+                let titleAttrs: [NSAttributedString.Key: Any] = [.font: UIFont.boldSystemFont(ofSize: 22)]
+                (entry.title as NSString).draw(at: CGPoint(x: margin, y: cursorY), withAttributes: titleAttrs)
                 cursorY += 32
 
                 let metaAttrs: [NSAttributedString.Key: Any] = [
-                    .font: UIFont.systemFont(ofSize: 11),
-                    .foregroundColor: UIColor.darkGray
+                    .font: UIFont.systemFont(ofSize: 11), .foregroundColor: UIColor.darkGray
                 ]
                 let meta = "By \(entry.authorName) · \(entry.timestamp.formatted(date: .abbreviated, time: .shortened))" as NSString
                 meta.draw(at: CGPoint(x: margin, y: cursorY), withAttributes: metaAttrs)
                 cursorY += 28
 
-                let bodyAttrs: [NSAttributedString.Key: Any] = [
-                    .font: UIFont.systemFont(ofSize: 13)
-                ]
+                let bodyAttrs: [NSAttributedString.Key: Any] = [.font: UIFont.systemFont(ofSize: 13)]
                 let bodyRect = CGRect(x: margin, y: cursorY, width: contentWidth, height: pageHeight - cursorY - margin - 100)
                 (entry.content as NSString).draw(in: bodyRect, withAttributes: bodyAttrs)
                 cursorY += bodyRect.height + 16
@@ -235,7 +219,6 @@ enum NotebookPDFExporter {
                     let text = "Autonomous Test — \(auto.routineName)\nStarting position: \(auto.startingPosition)\nScored: \(auto.samplesOrSpecimensScored)\nCycle time: \(String(format: "%.2f", auto.cycleTimeSeconds))s\nSuccess rate: \(String(format: "%.0f", auto.successRatePercent))%"
                     (text as NSString).draw(in: CGRect(x: margin, y: cursorY, width: contentWidth, height: 100), withAttributes: bodyAttrs)
                 }
-
                 if let imu = entry.imuLog {
                     let text = "IMU Tuning — \(imu.chip)\nLogo facing: \(imu.logoFacingDirection)\nUSB facing: \(imu.usbFacingDirection)\nYaw offset: \(String(format: "%.2f", imu.yawOffsetDegrees))°"
                     (text as NSString).draw(in: CGRect(x: margin, y: cursorY, width: contentWidth, height: 100), withAttributes: bodyAttrs)
@@ -254,6 +237,7 @@ private struct NewNotebookEntrySheet: View {
     let template: NotebookTemplate
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var context
+    @Environment(\.syncService) private var syncService
     @Environment(AuthenticationManager.self) private var authManager
 
     @State private var title = ""
@@ -286,7 +270,6 @@ private struct NewNotebookEntrySheet: View {
                     TextEditor(text: $content).frame(minHeight: 120)
                     TextField("Tags (comma-separated)", text: $tagsInput)
                 }
-
                 templateSpecificSection
             }
             .navigationTitle(template.rawValue)
@@ -358,8 +341,13 @@ private struct NewNotebookEntrySheet: View {
         }
 
         context.insert(entry)
-        context.insert(ActivityEvent(authorID: currentUser.id, authorName: currentUser.name, kind: .notebookEntry,
-                                      message: "added notebook entry: \(title)"))
+        syncService?.pushNotebookEntry(entry)
+
+        let event = ActivityEvent(authorID: currentUser.id, authorName: currentUser.name, kind: .notebookEntry,
+                                   message: "added notebook entry: \(title)")
+        context.insert(event)
+        syncService?.pushActivity(event)
+
         dismiss()
     }
 }
