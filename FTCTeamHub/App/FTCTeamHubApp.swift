@@ -2,9 +2,13 @@
 //  FTCTeamHubApp.swift
 //  FTCTeamHub
 //
-//  App entry point. Owns the SwiftData ModelContainer, configures Firebase
-//  for cross-device sync, injects the FTCScout API client + sync service
-//  into the environment, and routes between LoginView and MainTabView.
+//  App entry point. `syncService` is `lazy` so it's only constructed the
+//  first time it's actually touched (in `.onAppear`), which is guaranteed
+//  to be after `FirebaseApp.configure()` has already run in `init()` —
+//  this is a second layer of protection on top of the `lazy var db` fix
+//  inside FirebaseSyncService.swift itself, so this exact class of crash
+//  (Firestore touched before Firebase is configured) can't recur even if
+//  this file is edited again later.
 //
 
 import SwiftUI
@@ -24,13 +28,12 @@ struct FTCTeamHubApp: App {
     }()
 
     private let scoutAPI: FTCScoutAPIServicing = LiveFTCScoutAPIClient()
-    private let syncService = FirebaseSyncService()
+    private lazy var syncService = FirebaseSyncService()
 
     init() {
-        // Requires FTCTeamHub/GoogleService-Info.plist from your own
-        // Firebase project — see FIREBASE_SETUP.md. Safe to call even if
-        // the plist is a placeholder during initial development; network
-        // calls will simply fail gracefully until it's a real project.
+        // Must run before anything touches Firestore/Firebase — see the
+        // header comment above and in FirebaseSyncService.swift for why
+        // this ordering previously caused a launch-time crash.
         FirebaseApp.configure()
     }
 
