@@ -1,0 +1,62 @@
+# .github/workflows/build-unsigned-ipa.yml
+#
+# Builds FTCTeamHub entirely on a GitHub-hosted macOS runner — no local
+# Mac needed. Produces an UNSIGNED .ipa as a downloadable artifact.
+# AltServer signs it with your personal Apple ID at sideload time, exactly
+# like any other AltStore installation.
+#
+# How to run it: push this file (and project.yml) to your repo, then on
+# GitHub go to the "Actions" tab → "Build Unsigned IPA" → "Run workflow".
+
+name: Build Unsigned IPA
+
+on:
+  workflow_dispatch:   # manual trigger button in the Actions tab
+  push:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: macos-14
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Select Xcode version
+        run: sudo xcode-select -s /Applications/Xcode_15.4.app
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate Xcode project from project.yml
+        run: xcodegen generate
+
+      - name: Build unsigned .app for iOS devices
+        run: |
+          xcodebuild build \
+            -project FTCTeamHub.xcodeproj \
+            -scheme FTCTeamHub \
+            -sdk iphoneos \
+            -configuration Release \
+            -derivedDataPath build/DerivedData \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            DEVELOPMENT_TEAM=""
+
+      - name: Package .app into an unsigned .ipa
+        run: |
+          set -e
+          APP_PATH="build/DerivedData/Build/Products/Release-iphoneos/FTCTeamHub.app"
+          mkdir -p build/Payload
+          cp -R "$APP_PATH" build/Payload/
+          cd build
+          zip -r FTCTeamHub-unsigned.ipa Payload
+          cd ..
+
+      - name: Upload IPA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: FTCTeamHub-unsigned-ipa
+          path: build/FTCTeamHub-unsigned.ipa
