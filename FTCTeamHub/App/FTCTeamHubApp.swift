@@ -2,13 +2,16 @@
 //  FTCTeamHubApp.swift
 //  FTCTeamHub
 //
-//  App entry point. `syncService` is `lazy` so it's only constructed the
-//  first time it's actually touched (in `.onAppear`), which is guaranteed
-//  to be after `FirebaseApp.configure()` has already run in `init()` —
-//  this is a second layer of protection on top of the `lazy var db` fix
-//  inside FirebaseSyncService.swift itself, so this exact class of crash
-//  (Firestore touched before Firebase is configured) can't recur even if
-//  this file is edited again later.
+//  App entry point.
+//
+//  FIX: `syncService` was briefly `lazy var`, which doesn't compile on a
+//  struct — `lazy var` requires mutating access to initialize on first
+//  touch, but `FTCTeamHubApp.body` and `.onAppear` closures only get
+//  immutable access to `self`. The crash-prevention fix (deferring
+//  Firestore access until after `FirebaseApp.configure()` runs) already
+//  lives in the right place: `FirebaseSyncService.db` is `lazy var` inside
+//  that class, which works fine since classes don't have this restriction.
+//  So `syncService` itself just needs to be a plain `let` again here.
 //
 
 import SwiftUI
@@ -28,12 +31,13 @@ struct FTCTeamHubApp: App {
     }()
 
     private let scoutAPI: FTCScoutAPIServicing = LiveFTCScoutAPIClient()
-    private lazy var syncService = FirebaseSyncService()
+    private let syncService = FirebaseSyncService()
 
     init() {
-        // Must run before anything touches Firestore/Firebase — see the
-        // header comment above and in FirebaseSyncService.swift for why
-        // this ordering previously caused a launch-time crash.
+        // Must run before anything touches Firestore/Firebase. Safe here
+        // because FirebaseSyncService itself defers its Firestore instance
+        // (`db`) via `lazy var` until first actual use in `start(...)`,
+        // which happens later in `.onAppear`, well after this line runs.
         FirebaseApp.configure()
     }
 
