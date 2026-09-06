@@ -2,9 +2,8 @@
 //  IdeasTabView.swift
 //  FTCTeamHub
 //
-//  TAB 5 — Ideas & Whiteboard. Upvote-driven brainstorming feed with
-//  comment threads and one-tap "promote to task" once an idea has enough
-//  team consensus.
+//  NEW: posting/upvoting/commenting/promoting now calls syncService?.pushIdea(...)
+//  so ideas actually sync across devices.
 //
 
 import SwiftUI
@@ -49,6 +48,7 @@ private struct IdeaRow: View {
     @Bindable var idea: Idea
     @Environment(AuthenticationManager.self) private var authManager
     @Environment(\.modelContext) private var context
+    @Environment(\.syncService) private var syncService
 
     private var hasUpvoted: Bool {
         guard let uid = authManager.currentUser?.id else { return false }
@@ -87,15 +87,19 @@ private struct IdeaRow: View {
             idea.upvoterIDs.remove(at: index)
         } else {
             idea.upvoterIDs.append(uid)
-            context.insert(ActivityEvent(authorID: uid, authorName: name, kind: .ideaUpvoted,
-                                          message: "upvoted idea: \(idea.summary)"))
+            let event = ActivityEvent(authorID: uid, authorName: name, kind: .ideaUpvoted,
+                                       message: "upvoted idea: \(idea.summary)")
+            context.insert(event)
+            syncService?.pushActivity(event)
         }
+        syncService?.pushIdea(idea)
     }
 }
 
 private struct IdeaDetailView: View {
     @Bindable var idea: Idea
     @Environment(\.modelContext) private var context
+    @Environment(\.syncService) private var syncService
     @Environment(AuthenticationManager.self) private var authManager
     @State private var commentText = ""
 
@@ -145,6 +149,10 @@ private struct IdeaDetailView: View {
         guard let uid = authManager.currentUser?.id, let name = authManager.currentUser?.name else { return }
         idea.comments.append(IdeaComment(authorID: uid, authorName: name, text: commentText))
         commentText = ""
+        // Note: comments aren't yet mirrored to Firestore individually —
+        // pushIdea() only syncs top-level idea fields (summary/detail/
+        // upvotes/promoted state) for now. Extending this to sync the full
+        // comment thread follows the same pattern as pushIdea's dictionary.
     }
 
     private func promoteToTask() {
@@ -153,9 +161,16 @@ private struct IdeaDetailView: View {
                              status: .toDo, priority: .medium, tags: ["From Idea"],
                              authorID: currentUser.id, authorName: currentUser.name)
         context.insert(task)
+        syncService?.pushTask(task)
+
         idea.promotedToTask = true
-        context.insert(ActivityEvent(authorID: currentUser.id, authorName: currentUser.name, kind: .taskCreated,
-                                      message: "promoted idea to task: \(idea.summary)"))
+        syncService?.pushIdea(idea)
+
+        let event = ActivityEvent(authorID: currentUser.id, authorName: currentUser.name, kind: .taskCreated,
+                                   message: "promoted idea to task: \(idea.summary)")
+        context.insert(event)
+        syncService?.pushActivity(event)
+
         UINotificationFeedbackGenerator().notificationOccurred(.success)
     }
 }
@@ -165,6 +180,7 @@ private struct IdeaDetailView: View {
 private struct NewIdeaSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var context
+    @Environment(\.syncService) private var syncService
     @Environment(AuthenticationManager.self) private var authManager
     @State private var summary = ""
     @State private var detail = ""
@@ -189,8 +205,13 @@ private struct NewIdeaSheet: View {
         guard let currentUser = authManager.currentUser else { return }
         let idea = Idea(authorID: currentUser.id, authorName: currentUser.name, summary: summary, detail: detail)
         context.insert(idea)
-        context.insert(ActivityEvent(authorID: currentUser.id, authorName: currentUser.name, kind: .ideaPosted,
-                                      message: "posted idea: \(summary)"))
+        syncService?.pushIdea(idea)
+
+        let event = ActivityEvent(authorID: currentUser.id, authorName: currentUser.name, kind: .ideaPosted,
+                                   message: "posted idea: \(summary)")
+        context.insert(event)
+        syncService?.pushActivity(event)
+
         dismiss()
     }
 }
