@@ -6,6 +6,20 @@
 //  structured templates (autonomous test logs, Control Hub config, BHI260AP
 //  IMU tuning) and image attachments.
 //
+//  FIX LOG (from CI build failures):
+//  1. Removed `extension NotebookTemplate: Identifiable {}` — the enum
+//     already declares Identifiable conformance in Models.swift, so this
+//     was a redundant/duplicate conformance error.
+//  2. Split every comma-joined `@State private var a = "", b = ""` line
+//     into one `@State` declaration per line — a property wrapper can only
+//     attach to a single variable, not a comma list. The old grouped form
+//     silently broke Swift's memberwise-init synthesis for the sheet too,
+//     which is what caused the separate "initializer is inaccessible"
+//     error.
+//  3. Replaced `"\(value, specifier: "%.2f")"` string interpolation (which
+//     only works inside SwiftUI's `Text(_:)`, not in a plain String passed
+//     to `LabeledContent`) with `String(format:)`.
+//
 
 import SwiftUI
 import SwiftData
@@ -65,7 +79,8 @@ private struct NotebookRow: View {
     }
 }
 
-extension NotebookTemplate: Identifiable {}
+// NOTE: no `extension NotebookTemplate: Identifiable {}` here — the enum
+// in Models.swift already declares `Identifiable` conformance directly.
 
 // MARK: - Detail (rendered Markdown + structured payloads)
 
@@ -111,8 +126,8 @@ private struct AutonomousLogCard: View {
             VStack(alignment: .leading, spacing: 6) {
                 LabeledContent("Starting position", value: log.startingPosition)
                 LabeledContent("Scored", value: "\(log.samplesOrSpecimensScored)")
-                LabeledContent("Cycle time", value: "\(log.cycleTimeSeconds, specifier: "%.2f")s")
-                LabeledContent("Success rate", value: "\(log.successRatePercent, specifier: "%.0f")%")
+                LabeledContent("Cycle time", value: String(format: "%.2fs", log.cycleTimeSeconds))
+                LabeledContent("Success rate", value: String(format: "%.0f%%", log.successRatePercent))
                 if !log.failureNotes.isEmpty {
                     Text(log.failureNotes).font(.caption).foregroundStyle(.secondary)
                 }
@@ -144,8 +159,8 @@ private struct IMULogCard: View {
             VStack(alignment: .leading, spacing: 6) {
                 LabeledContent("Logo facing", value: log.logoFacingDirection)
                 LabeledContent("USB facing", value: log.usbFacingDirection)
-                LabeledContent("Yaw offset", value: "\(log.yawOffsetDegrees, specifier: "%.2f")°")
-                LabeledContent("10-min drift", value: "\(log.driftOverTenMinDegrees, specifier: "%.2f")°")
+                LabeledContent("Yaw offset", value: String(format: "%.2f°", log.yawOffsetDegrees))
+                LabeledContent("10-min drift", value: String(format: "%.2f°", log.driftOverTenMinDegrees))
                 if !log.calibrationNotes.isEmpty {
                     Text(log.calibrationNotes).font(.caption).foregroundStyle(.secondary)
                 }
@@ -167,12 +182,27 @@ private struct NewNotebookEntrySheet: View {
     @State private var tagsInput = ""
     @State private var selectedPhotos: [PhotosPickerItem] = []
 
-    // Template-specific structured fields
-    @State private var routineName = "", startingPosition = ""
-    @State private var samplesScored = 0, cycleTime = 0.0, successRate = 0.0, failureNotes = ""
-    @State private var hubOS = "1.1.3", sdkVersion = "10.1", expansionHubs = 0
-    @State private var imuChip = "BHI260AP", logoFacing = "UP", usbFacing = "FORWARD"
-    @State private var yawOffset = 0.0, drift = 0.0, calibrationNotes = ""
+    // Template-specific structured fields — each @State on its own line.
+    // (A property wrapper can only ever apply to ONE variable per line;
+    // comma-separated grouping like `@State var a = "", b = ""` is invalid
+    // Swift and was the root cause of the earlier CI build failure.)
+    @State private var routineName = ""
+    @State private var startingPosition = ""
+    @State private var samplesScored = 0
+    @State private var cycleTime = 0.0
+    @State private var successRate = 0.0
+    @State private var failureNotes = ""
+
+    @State private var hubOS = "1.1.3"
+    @State private var sdkVersion = "10.1"
+    @State private var expansionHubs = 0
+
+    @State private var imuChip = "BHI260AP"
+    @State private var logoFacing = "UP"
+    @State private var usbFacing = "FORWARD"
+    @State private var yawOffset = 0.0
+    @State private var drift = 0.0
+    @State private var calibrationNotes = ""
 
     var body: some View {
         NavigationStack {
