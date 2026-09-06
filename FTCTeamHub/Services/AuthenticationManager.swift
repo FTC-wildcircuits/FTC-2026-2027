@@ -2,16 +2,10 @@
 //  AuthenticationManager.swift
 //  FTCTeamHub
 //
-//  Robust, persistent authentication: real account creation, real sign-in
-//  against stored credentials, and — critically — a session that survives
-//  app relaunches via Keychain + SwiftData, fixing the "app kicks you out"
-//  bug from the previous version.
-//
-//  Security note: password hashing here (SHA256, no per-user salt) is
-//  appropriate for an internal small-team tool with no sensitive payment
-//  or personal data — it is NOT bank-grade. If this app ever handles more
-//  sensitive data, swap in a salted hash (e.g. PBKDF2/Argon2) here without
-//  touching any View code, since every View talks only to this manager.
+//  NEW: now takes an optional `syncService` so sign-up pushes the new
+//  user's profile to Firestore immediately — this is what makes a
+//  teammate's account visible in the Roster tab on OTHER devices, and
+//  lets them sign in from any device once their profile has synced down.
 //
 
 import Foundation
@@ -27,17 +21,15 @@ final class AuthenticationManager {
     var errorMessage: String?
 
     private let modelContext: ModelContext
+    private let syncService: FirebaseSyncService?
     private let sessionKey = "com.ftcteamhub.session.userID"
 
-    init(modelContext: ModelContext) {
+    init(modelContext: ModelContext, syncService: FirebaseSyncService? = nil) {
         self.modelContext = modelContext
+        self.syncService = syncService
         restoreSession()
     }
 
-    /// Looks up a saved session id in the Keychain and, if a matching user
-    /// still exists in SwiftData, signs them back in automatically. Called
-    /// once at launch so users are never dropped back to the login screen
-    /// just for reopening the app.
     func restoreSession() {
         guard let idString = KeychainService.read(sessionKey),
               let uuid = UUID(uuidString: idString) else { return }
@@ -70,6 +62,10 @@ final class AuthenticationManager {
         modelContext.insert(user)
         try? modelContext.save()
 
+        // Push to Firestore so other devices see this team member and can
+        // sign in as them once it syncs down.
+        syncService?.pushUser(user)
+
         KeychainService.save(sessionKey, value: user.id.uuidString)
         currentUser = user
     }
@@ -80,7 +76,7 @@ final class AuthenticationManager {
 
         let descriptor = FetchDescriptor<AppUser>(predicate: #Predicate { $0.email == normalizedEmail })
         guard let user = try? modelContext.fetch(descriptor).first else {
-            errorMessage = "No account found with that email. Switch to Create Account to sign up."
+            errorMessage = "No account found with that email on this device yet. If you signed up on another device, make sure both phones have been online recently so it can sync — then try again in a few seconds."
             return
         }
 
