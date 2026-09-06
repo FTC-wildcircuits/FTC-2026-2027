@@ -2,16 +2,9 @@
 //  FTCTeamHubApp.swift
 //  FTCTeamHub
 //
-//  App entry point.
-//
-//  FIX: `syncService` was briefly `lazy var`, which doesn't compile on a
-//  struct — `lazy var` requires mutating access to initialize on first
-//  touch, but `FTCTeamHubApp.body` and `.onAppear` closures only get
-//  immutable access to `self`. The crash-prevention fix (deferring
-//  Firestore access until after `FirebaseApp.configure()` runs) already
-//  lives in the right place: `FirebaseSyncService.db` is `lazy var` inside
-//  that class, which works fine since classes don't have this restriction.
-//  So `syncService` itself just needs to be a plain `let` again here.
+//  NEW: ContentView now reads `syncService` from the environment and
+//  passes it into AuthenticationManager, so sign-ups push the new
+//  profile to Firestore (see AuthenticationManager.swift).
 //
 
 import SwiftUI
@@ -34,10 +27,6 @@ struct FTCTeamHubApp: App {
     private let syncService = FirebaseSyncService()
 
     init() {
-        // Must run before anything touches Firestore/Firebase. Safe here
-        // because FirebaseSyncService itself defers its Firestore instance
-        // (`db`) via `lazy var` until first actual use in `start(...)`,
-        // which happens later in `.onAppear`, well after this line runs.
         FirebaseApp.configure()
     }
 
@@ -79,6 +68,7 @@ extension EnvironmentValues {
 
 struct ContentView: View {
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.syncService) private var syncService
     @State private var authManager: AuthenticationManager?
 
     var body: some View {
@@ -100,7 +90,7 @@ struct ContentView: View {
         .animation(.easeInOut(duration: 0.2), value: authManager?.currentUser?.id)
         .onAppear {
             if authManager == nil {
-                authManager = AuthenticationManager(modelContext: modelContext)
+                authManager = AuthenticationManager(modelContext: modelContext, syncService: syncService)
             }
         }
     }
