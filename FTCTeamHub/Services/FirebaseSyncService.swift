@@ -2,25 +2,19 @@
 //  FirebaseSyncService.swift
 //  FTCTeamHub
 //
-//  Cross-device backend sync using Firebase Firestore — the free-tier
-//  alternative to CloudKit, since CloudKit's capability is locked behind a
-//  paid Apple Developer Program membership and this app is built for
-//  free-Apple-ID AltStore sideloading. Firestore needs no special Apple
-//  entitlements, just the GoogleService-Info.plist from your own free
-//  Firebase project (see FIREBASE_SETUP.md).
+//  Cross-device backend sync using Firebase Firestore.
 //
-//  SCOPE: This syncs `TaskItem` and `ActivityEvent` bidirectionally in real
-//  time — the two collections where "did my teammate already see/do this"
-//  actually matters most day-to-day. `NotebookEntry`, `TestRunRecord`, and
-//  `Idea` can be wired in following the exact same pattern (see the two
-//  push/listen pairs below as a template) once you're happy with this
-//  layer's behavior.
-//
-//  Design: every write goes to SwiftData FIRST (so the app is always fully
-//  usable offline), then mirrors to Firestore. Incoming Firestore snapshot
-//  listeners upsert into SwiftData by matching on the model's own `id`
-//  (stored as the Firestore document ID), so the same record is never
-//  duplicated across devices.
+//  CRASH FIX: `db` was previously `private let db = Firestore.firestore()`.
+//  Swift initializes a class's stored property defaults immediately when
+//  the instance is constructed — and this class gets constructed as part
+//  of FTCTeamHubApp's OWN property initialization, which happens BEFORE
+//  FTCTeamHubApp.init()'s body (where FirebaseApp.configure() lives) ever
+//  runs. That meant Firestore.firestore() was being called before Firebase
+//  was configured, which throws an uncaught Objective-C exception and
+//  aborts the whole app instantly on launch — exactly the "kicked out"
+//  symptom. Making `db` `lazy var` defers its creation until the first
+//  time it's actually accessed (inside `start(modelContext:)`, called from
+//  `.onAppear` well after `configure()` has already run), which fixes it.
 //
 
 import Foundation
@@ -30,13 +24,11 @@ import FirebaseFirestore
 @MainActor
 final class FirebaseSyncService {
 
-    private let db = Firestore.firestore()
+    private lazy var db = Firestore.firestore()
     private var taskListener: ListenerRegistration?
     private var activityListener: ListenerRegistration?
     private weak var modelContext: ModelContext?
 
-    /// Call once, after Firebase has been configured and you have a
-    /// ModelContext available (see FTCTeamHubApp.swift).
     func start(modelContext: ModelContext) {
         self.modelContext = modelContext
         listenForTaskChanges()
@@ -85,8 +77,6 @@ final class FirebaseSyncService {
         let existing = try? context.fetch(descriptor).first
 
         let remoteModified = (data["lastModified"] as? Timestamp)?.dateValue() ?? .distantPast
-        // Skip if our local copy is already newer or the same (avoids
-        // clobbering an in-flight local edit with a stale remote write).
         if let existing, existing.lastModified >= remoteModified { return }
 
         let task = existing ?? TaskItem(
@@ -133,7 +123,7 @@ final class FirebaseSyncService {
     private func insertActivityIfNeeded(from document: QueryDocumentSnapshot) {
         guard let context = modelContext, let id = UUID(uuidString: document.documentID) else { return }
         let descriptor = FetchDescriptor<ActivityEvent>(predicate: #Predicate { $0.id == id })
-        guard (try? context.fetch(descriptor).first) == nil else { return } // already have it
+        guard (try? context.fetch(descriptor).first) == nil else { return }
 
         let data = document.data()
         guard let authorID = UUID(uuidString: data["authorID"] as? String ?? ""),
