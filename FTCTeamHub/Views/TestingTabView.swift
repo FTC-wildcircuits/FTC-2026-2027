@@ -2,10 +2,8 @@
 //  TestingTabView.swift
 //  FTCTeamHub
 //
-//  TAB 2 — Robot Testing & Telemetry. One-handed logging of YOUR robot's
-//  practice runs (not opponent scouting), driver attribution, quick
-//  hardware-failure toggles, and Swift Charts analytics of score
-//  progression over the season.
+//  NEW: logging a test run now calls syncService?.pushTestRun(...) so
+//  practice data syncs across devices.
 //
 
 import SwiftUI
@@ -50,6 +48,7 @@ private struct TestLogForm: View {
     let users: [AppUser]
     @Environment(AuthenticationManager.self) private var authManager
     @Environment(\.modelContext) private var context
+    @Environment(\.syncService) private var syncService
 
     @State private var selectedDriverID: UUID?
     @State private var autoScore = 0
@@ -130,10 +129,14 @@ private struct TestLogForm: View {
             recordedByID: currentUser.id, recordedByName: currentUser.name
         )
         context.insert(record)
-        context.insert(ActivityEvent(
+        syncService?.pushTestRun(record)
+
+        let event = ActivityEvent(
             authorID: currentUser.id, authorName: currentUser.name, kind: .testLogged,
             message: "logged a test run for \(driver.name)"
-        ))
+        )
+        context.insert(event)
+        syncService?.pushActivity(event)
 
         UINotificationFeedbackGenerator().notificationOccurred(.success)
         autoScore = 0; teleopScore = 0; endgameScore = 0
