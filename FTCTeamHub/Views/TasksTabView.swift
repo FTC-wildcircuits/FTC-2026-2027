@@ -2,9 +2,10 @@
 //  TasksTabView.swift
 //  FTCTeamHub
 //
-//  TAB 3 — Tasks & Kanban. "My Tasks" personalized dashboard plus a shared
-//  four-column Kanban board. Assignees are now linked directly to real
-//  roster members (AppUser), not free-typed strings.
+//  NEW: every task create/status-change now calls syncService?.pushTask(...)
+//  so changes actually propagate to Firestore, and from there to other
+//  devices via FirebaseSyncService's listener (previously this view never
+//  pushed anything, so nothing had anything to sync).
 //
 
 import SwiftUI
@@ -93,6 +94,7 @@ private struct MyTasksList: View {
 
 private struct TaskRow: View {
     @Bindable var task: TaskItem
+    @Environment(\.syncService) private var syncService
 
     private var priorityColor: Color {
         switch task.priority {
@@ -134,6 +136,7 @@ private struct TaskRow: View {
                 UINotificationFeedbackGenerator().notificationOccurred(.success)
                 task.status = .done
                 task.lastModified = .now
+                syncService?.pushTask(task)
             } label: { Label("Done", systemImage: "checkmark") }
             .tint(.green)
         }
@@ -188,6 +191,7 @@ private struct KanbanColumn: View {
 
 private struct KanbanCard: View {
     @Bindable var task: TaskItem
+    @Environment(\.syncService) private var syncService
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -210,6 +214,7 @@ private struct KanbanCard: View {
                   let newStatus = note.userInfo?["status"] as? TaskStatus else { return }
             task.status = newStatus
             task.lastModified = .now
+            syncService?.pushTask(task)
             UIImpactFeedbackGenerator(style: .rigid).impactOccurred()
         }
     }
@@ -253,6 +258,7 @@ private struct NewTaskSheet: View {
     let users: [AppUser]
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var context
+    @Environment(\.syncService) private var syncService
     @Environment(AuthenticationManager.self) private var authManager
 
     @State private var title = ""
@@ -307,8 +313,13 @@ private struct NewTaskSheet: View {
                              deadline: hasDeadline ? deadline : nil, tags: tags,
                              authorID: currentUser.id, authorName: currentUser.name)
         context.insert(task)
-        context.insert(ActivityEvent(authorID: currentUser.id, authorName: currentUser.name, kind: .taskCreated,
-                                      message: "created task: \(title)"))
+        syncService?.pushTask(task)
+
+        let event = ActivityEvent(authorID: currentUser.id, authorName: currentUser.name, kind: .taskCreated,
+                                   message: "created task: \(title)")
+        context.insert(event)
+        syncService?.pushActivity(event)
+
         UINotificationFeedbackGenerator().notificationOccurred(.success)
         dismiss()
     }
