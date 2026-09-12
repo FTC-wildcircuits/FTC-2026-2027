@@ -2,16 +2,14 @@
 //  ChatService.swift
 //  FTCTeamHub
 //
-//  Team chat, live across all devices, independent of practice sessions —
-//  a running channel for anything the team needs to discuss. Deliberately
-//  NOT mirrored into SwiftData: chat is inherently an online, ephemeral-ish
-//  feed, so it's kept purely in Firestore and streamed straight into an
-//  in-memory published array. If you later want offline read history,
-//  mirror this into a SwiftData model the same way FirebaseSyncService
-//  does for Tasks/Notebook/etc.
-//
-//  Same crash-avoidance pattern as FirebaseSyncService: `db` is `lazy var`
-//  so Firestore isn't touched until after FirebaseApp.configure() has run.
+//  FIX: `db` is now marked `@ObservationIgnored`. The `@Observable` macro
+//  rewrites every stored property into a tracked, computed-backed property
+//  so SwiftUI can watch it for changes — but `lazy` cannot be combined
+//  with that rewrite (that's the exact "init accessor cannot refer to
+//  property '_db'" / "'lazy' cannot be used on a computed property" error
+//  from the build log). `@ObservationIgnored` opts `db` out of the
+//  Observable transformation entirely, which is correct anyway: we only
+//  need SwiftUI to react to changes in `messages`, never to `db` itself.
 //
 
 import Foundation
@@ -30,7 +28,10 @@ struct ChatMessage: Identifiable, Hashable {
 @Observable
 final class ChatService {
 
+    @ObservationIgnored
     private lazy var db = Firestore.firestore()
+
+    @ObservationIgnored
     private var listener: ListenerRegistration?
 
     private(set) var messages: [ChatMessage] = []
