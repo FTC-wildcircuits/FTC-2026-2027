@@ -2,9 +2,7 @@
 //  DashboardTabView.swift
 //  FTCTeamHub
 //
-//  NEW: added a local "Insights" card (InsightsEngine) — honestly framed
-//  as on-device rule-based analysis, not actual AI — surfacing trends and
-//  flags from your own logged data without you having to go dig for them.
+//  NEW: added a search toolbar button presenting GlobalSearchView.
 //
 
 import SwiftUI
@@ -24,6 +22,7 @@ struct DashboardTabView: View {
     @State private var nextEvent: FTCEventSummary?
     @State private var daysUntilEvent: Int?
     @State private var isLoadingEvent = true
+    @State private var isPresentingSearch = false
 
     private var myOpenTasks: [TaskItem] {
         guard let uid = authManager.currentUser?.id else { return [] }
@@ -61,6 +60,12 @@ struct DashboardTabView: View {
                 .padding()
             }
             .navigationTitle("Dashboard")
+            .toolbar {
+                ToolbarItem(placement: .primaryAction) {
+                    Button { isPresentingSearch = true } label: { Image(systemName: "magnifyingglass") }
+                }
+            }
+            .sheet(isPresented: $isPresentingSearch) { GlobalSearchView() }
             .task { await loadNextEvent() }
         }
     }
