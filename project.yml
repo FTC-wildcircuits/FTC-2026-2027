@@ -1,11 +1,8 @@
 # project.yml
-# XcodeGen spec. Now includes the Firebase iOS SDK as a Swift Package
-# dependency (added declaratively here — no Xcode GUI needed to add it)
-# and bundles GoogleService-Info.plist as a resource for cross-device sync.
-#
-# You MUST place a real GoogleService-Info.plist (from your own Firebase
-# project console) at FTCTeamHub/GoogleService-Info.plist before this will
-# build correctly — see FIREBASE_SETUP.md for the exact steps.
+# XcodeGen spec. NEW: NSCameraUsageDescription added — required at runtime
+# for the QR check-in/check-out scanner (VisionKit DataScannerViewController).
+# Without this key, iOS silently kills the app the instant camera access
+# is requested — always add a usage description BEFORE using any camera API.
 
 name: FTCTeamHub
 options:
@@ -37,6 +34,7 @@ targets:
         SWIFT_VERSION: "5.0"
         TARGETED_DEVICE_FAMILY: "1,2"
         INFOPLIST_KEY_UILaunchScreen_Generation: "YES"
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         CODE_SIGNING_ALLOWED: NO
         CODE_SIGNING_REQUIRED: NO
         CODE_SIGN_IDENTITY: ""
@@ -49,6 +47,7 @@ targets:
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
         UIRequiresFullScreen: true
+        NSCameraUsageDescription: "FTC Team Hub uses the camera to scan QR labels on inventory items for quick check-in and check-out."
 
 schemes:
   FTCTeamHub:
