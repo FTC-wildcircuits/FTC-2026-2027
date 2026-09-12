@@ -2,10 +2,9 @@
 //  LiveDataTabView.swift
 //  FTCTeamHub
 //
-//  TAB 6 — Live FTC Data. Redesigned to be denser and more useful: search
-//  results now show a compact OPR summary with a direct link into the full
-//  multi-season Team Dashboard (history chart, events attended, alliance
-//  partners), rather than a flat single-season card.
+//  NEW: added a "Scoring Sim" segment (ScoringSimulatorView) — fits here
+//  thematically since it's directly used during alliance selection,
+//  alongside the team-search and bookmarking tools already in this tab.
 //
 
 import SwiftUI
@@ -17,7 +16,7 @@ struct LiveDataTabView: View {
     @State private var section: Section = .search
 
     enum Section: String, CaseIterable, Identifiable {
-        case search = "Search", bookmarked = "Bookmarked", events = "Events"
+        case search = "Search", bookmarked = "Bookmarked", events = "Events", scoring = "Scoring Sim"
         var id: String { rawValue }
     }
 
@@ -36,6 +35,7 @@ struct LiveDataTabView: View {
                 case .search: TeamSearchView(api: api)
                 case .bookmarked: BookmarkedTeamsView(api: api)
                 case .events: EventsBrowserView(api: api)
+                case .scoring: ScoringSimulatorView()
                 }
             }
             .navigationTitle("Live FTC Data")
@@ -121,7 +121,7 @@ private struct TeamSearchView: View {
         errorMessage = nil
         result = nil
         do {
-            result = try await api.fetchTeamOPR(teamNumber: number, season: 2025)
+            result = try await api.fetchTeamOPR(teamNumber: number, season: 2026)
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -198,8 +198,9 @@ private struct BookmarkedTeamsView: View {
     var body: some View {
         List {
             if bookmarks.isEmpty {
-                ContentUnavailableView("No tracked teams", systemImage: "bookmark",
-                                       description: Text("Search a team and tap \"Track This Team\" to save it here."))
+                EmptyStateView(icon: "bookmark", title: "No tracked teams",
+                               subtitle: "Search a team and tap \"Track This Team\" to save it here.",
+                               tint: .blue)
             }
             ForEach(bookmarks) { team in
                 NavigationLink {
@@ -238,8 +239,9 @@ private struct EventsBrowserView: View {
             } else if let errorMessage {
                 Text(errorMessage).font(.footnote).foregroundStyle(.red)
             } else if events.isEmpty {
-                ContentUnavailableView("No events found", systemImage: "calendar",
-                                       description: Text("Try again later — the season schedule may not be published yet."))
+                EmptyStateView(icon: "calendar", title: "No events found",
+                               subtitle: "Try again later — the season schedule may not be published yet.",
+                               tint: .orange)
             } else {
                 ForEach(events) { event in
                     VStack(alignment: .leading, spacing: 2) {
@@ -253,7 +255,7 @@ private struct EventsBrowserView: View {
         .listStyle(.plain)
         .task {
             do {
-                events = try await api.fetchEvents(season: 2025)
+                events = try await api.fetchEvents(season: 2026)
             } catch {
                 errorMessage = error.localizedDescription
             }
