@@ -2,10 +2,8 @@
 //  PreviewSupport.swift
 //  FTCTeamHub
 //
-//  Shared in-memory ModelContainer + rich sample data used by every
-//  SwiftUI `#Preview` block in this project, so every screen can be
-//  designed and tested instantly in Xcode without running the full app
-//  or signing in manually each time.
+//  NEW: schema includes Battery, ChecklistRun, InventoryItem, plus sample
+//  data for each so their views preview correctly in Xcode.
 //
 
 import Foundation
@@ -15,7 +13,8 @@ import SwiftData
 func makePreviewContainer() -> ModelContainer {
     let schema = Schema([
         AppUser.self, TaskItem.self, NotebookEntry.self,
-        TestRunRecord.self, Idea.self, ActivityEvent.self, TrackedTeam.self
+        TestRunRecord.self, Idea.self, ActivityEvent.self, TrackedTeam.self,
+        Battery.self, ChecklistRun.self, InventoryItem.self
     ])
     let config = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
     let container = try! ModelContainer(for: schema, configurations: [config])
@@ -55,14 +54,14 @@ func makePreviewContainer() -> ModelContainer {
                                   autoScore: 28, teleopScore: 64, endgameScore: 15,
                                   cycleTimeSeconds: 4.2, autoConsistencyPercent: 85,
                                   mechanicalIssues: ["Intake Jam"], notes: "Consistent auto, strong cycle time.",
-                                  recordedByID: alex.id, recordedByName: alex.name))
+                                  recordedByID: alex.id, recordedByName: alex.name, batteryLabel: "B1"))
 
     context.insert(TestRunRecord(driverID: jordan.id, driverName: jordan.name,
                                   date: Calendar.current.date(byAdding: .day, value: -7, to: .now) ?? .now,
                                   autoScore: 18, teleopScore: 50, endgameScore: 10,
                                   cycleTimeSeconds: 5.1, autoConsistencyPercent: 65,
                                   mechanicalIssues: ["Belt Slipped", "Code Crash"], notes: "Rough first week.",
-                                  recordedByID: alex.id, recordedByName: alex.name))
+                                  recordedByID: alex.id, recordedByName: alex.name, batteryLabel: "B2"))
 
     context.insert(NotebookEntry(authorID: alex.id, authorName: alex.name, title: "IMU drift investigation",
                                   content: "## Summary\nObserved yaw drift after 8 minutes of continuous operation.",
@@ -86,6 +85,22 @@ func makePreviewContainer() -> ModelContainer {
     context.insert(TrackedTeam(teamNumber: 18234, teamName: "Circuit Breakers",
                                 note: "Strong auto, watch their endgame climb.",
                                 addedByID: priya.id, addedByName: priya.name))
+
+    context.insert(Battery(label: "B1", status: .charged, cycleCount: 12))
+    context.insert(Battery(label: "B2", status: .inUse, cycleCount: 34, notes: "Slight voltage sag under load."))
+    context.insert(Battery(label: "B3", status: .dead, cycleCount: 58, notes: "Retire — won't hold charge."))
+
+    context.insert(InventoryItem(name: "REV Expansion Hub (spare)", category: "Electronics",
+                                  binLocation: "Shelf 2, Bin B", quantity: 2))
+    context.insert(InventoryItem(name: "Custom 3D-printed intake roller", category: "Printed Parts",
+                                  binLocation: "Drawer 4", quantity: 4, notes: "PETG, 0.3mm layer height"))
+
+    let preFlight = ChecklistType.preFlight
+    context.insert(ChecklistRun(
+        type: preFlight,
+        itemResults: preFlight.defaultItems.map { ChecklistItemResult(text: $0, checked: true) },
+        completedByID: sam.id, completedByName: sam.name
+    ))
 
     try? context.save()
     return container
