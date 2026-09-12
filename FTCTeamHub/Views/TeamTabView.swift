@@ -9,6 +9,11 @@
 //  instead it explains concepts in original wording and sends you to the
 //  authoritative source for actual rule numbers and point values.
 //
+//  NEW: the "Version 1.0" label in AboutView is now wrapped in
+//  SecretResetTrigger — tap it 7 times within 3 seconds to reveal the
+//  hidden "Reset App Data" flow. No visible reset button exists anywhere
+//  else in the app.
+//
 
 import SwiftUI
 import SwiftData
@@ -394,7 +399,15 @@ private struct AboutView: View {
                         .font(.system(size: 40))
                         .foregroundStyle(Color.accentColor)
                     Text("FTC Team Hub").font(.headline)
-                    Text("Version 1.0").font(.caption).foregroundStyle(.secondary)
+
+                    // Hidden reset unlock lives here: tap this label 7
+                    // times within 3 seconds to reveal "Reset App Data".
+                    // No visible reset button exists anywhere else.
+                    SecretResetTrigger {
+                        Text("Version 1.0")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
                 }
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 12)
