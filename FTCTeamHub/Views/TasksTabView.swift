@@ -2,10 +2,12 @@
 //  TasksTabView.swift
 //  FTCTeamHub
 //
-//  NEW: every task create/status-change now calls syncService?.pushTask(...)
-//  so changes actually propagate to Firestore, and from there to other
-//  devices via FirebaseSyncService's listener (previously this view never
-//  pushed anything, so nothing had anything to sync).
+//  NEW: added a "Calendar" view mode — a week-strip agenda (not a full
+//  month grid, to keep the date math simple and reliable) showing which
+//  days have deadlines, with the day's tasks listed below. Covers
+//  "organize meeting schedules, project deadlines, and portfolio
+//  milestone logs" by tagging tasks with dates the same way as any other
+//  deadline.
 //
 
 import SwiftUI
@@ -21,7 +23,7 @@ struct TasksTabView: View {
     @State private var filterTag: String?
 
     enum ViewMode: String, CaseIterable, Identifiable {
-        case myTasks = "My Tasks", board = "Team Board"
+        case myTasks = "My Tasks", board = "Team Board", calendar = "Calendar"
         var id: String { rawValue }
     }
 
@@ -54,6 +56,7 @@ struct TasksTabView: View {
                 switch viewMode {
                 case .myTasks: MyTasksList(tasks: myTasks)
                 case .board: KanbanBoard(tasks: filteredBoardTasks)
+                case .calendar: TaskCalendarView(tasks: allTasks)
                 }
             }
             .navigationTitle("Tasks")
@@ -79,8 +82,8 @@ private struct MyTasksList: View {
 
     var body: some View {
         if tasks.isEmpty {
-            ContentUnavailableView("All caught up", systemImage: "checkmark.circle",
-                                   description: Text("No open tasks assigned to you."))
+            EmptyStateView(icon: "checkmark.circle", title: "All caught up",
+                           subtitle: "No open tasks assigned to you.", tint: .blue)
         } else {
             List {
                 ForEach(tasks) { task in
@@ -137,6 +140,7 @@ private struct TaskRow: View {
                 task.status = .done
                 task.lastModified = .now
                 syncService?.pushTask(task)
+                NotificationScheduler.cancelReminder(for: task)
             } label: { Label("Done", systemImage: "checkmark") }
             .tint(.green)
         }
@@ -215,6 +219,7 @@ private struct KanbanCard: View {
             task.status = newStatus
             task.lastModified = .now
             syncService?.pushTask(task)
+            if newStatus == .done { NotificationScheduler.cancelReminder(for: task) }
             UIImpactFeedbackGenerator(style: .rigid).impactOccurred()
         }
     }
@@ -222,6 +227,103 @@ private struct KanbanCard: View {
 
 extension Notification.Name {
     static let taskDroppedOnColumn = Notification.Name("taskDroppedOnColumn")
+}
+
+// MARK: - Calendar (week-strip agenda)
+
+private struct TaskCalendarView: View {
+    let tasks: [TaskItem]
+    @State private var weekStart: Date = Calendar.current.dateInterval(of: .weekOfYear, for: .now)?.start ?? .now
+    @State private var selectedDate: Date = Calendar.current.startOfDay(for: .now)
+
+    private var weekDays: [Date] {
+        (0..<7).compactMap { Calendar.current.date(byAdding: .day, value: $0, to: weekStart) }
+    }
+
+    private func tasksOn(_ date: Date) -> [TaskItem] {
+        tasks.filter { task in
+            guard let deadline = task.deadline else { return false }
+            return Calendar.current.isDate(deadline, inSameDayAs: date)
+        }
+    }
+
+    var body: some View {
+        VStack(spacing: 12) {
+            HStack {
+                Button { changeWeek(by: -1) } label: { Image(systemName: "chevron.left") }
+                Spacer()
+                Text(weekRangeLabel).font(.subheadline.weight(.medium))
+                Spacer()
+                Button { changeWeek(by: 1) } label: { Image(systemName: "chevron.right") }
+            }
+            .padding(.horizontal)
+
+            HStack(spacing: 6) {
+                ForEach(weekDays, id: \.self) { day in
+                    DayButton(date: day, isSelected: Calendar.current.isDate(day, inSameDayAs: selectedDate),
+                              hasTasks: !tasksOn(day).isEmpty) {
+                        selectedDate = day
+                    }
+                }
+            }
+            .padding(.horizontal)
+
+            Divider()
+
+            let dayTasks = tasksOn(selectedDate)
+            if dayTasks.isEmpty {
+                EmptyStateView(icon: "calendar", title: "Nothing due",
+                               subtitle: "No task deadlines on this day.", tint: .blue)
+            } else {
+                List {
+                    ForEach(dayTasks) { task in
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(task.title).font(.body.weight(.medium))
+                            Text("\(task.assignedToName) · \(task.priority.rawValue)")
+                                .font(.caption).foregroundStyle(.secondary)
+                        }
+                        .padding(.vertical, 2)
+                    }
+                }
+                .listStyle(.plain)
+            }
+        }
+        .padding(.top, 8)
+    }
+
+    private func changeWeek(by delta: Int) {
+        if let newStart = Calendar.current.date(byAdding: .weekOfYear, value: delta, to: weekStart) {
+            weekStart = newStart
+        }
+    }
+
+    private var weekRangeLabel: String {
+        guard let last = weekDays.last else { return "" }
+        let formatter = DateFormatter()
+        formatter.dateFormat = "MMM d"
+        return "\(formatter.string(from: weekStart)) – \(formatter.string(from: last))"
+    }
+}
+
+private struct DayButton: View {
+    let date: Date
+    let isSelected: Bool
+    let hasTasks: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            VStack(spacing: 4) {
+                Text(date.formatted(.dateTime.weekday(.abbreviated))).font(.caption2).foregroundStyle(.secondary)
+                Text(date.formatted(.dateTime.day())).font(.subheadline.weight(.semibold))
+                Circle().fill(hasTasks ? Color.accentColor : .clear).frame(width: 5, height: 5)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 8)
+            .background(isSelected ? Color.accentColor.opacity(0.15) : .clear, in: RoundedRectangle(cornerRadius: 10))
+        }
+        .buttonStyle(.plain)
+    }
 }
 
 // MARK: - Tag filter bar
@@ -287,10 +389,12 @@ private struct NewTaskSheet: View {
                     Toggle("Set deadline", isOn: $hasDeadline)
                     if hasDeadline {
                         DatePicker("Deadline", selection: $deadline, displayedComponents: .date)
+                        Text("You'll get a reminder notification at 9 AM on this day.")
+                            .font(.caption2).foregroundStyle(.secondary)
                     }
                 }
                 Section("Tags (comma-separated)") {
-                    TextField("Chassis, Odometry, Outreach", text: $tagsInput)
+                    TextField("Chassis, Odometry, Outreach, Meeting, Portfolio", text: $tagsInput)
                 }
             }
             .navigationTitle("New Task")
@@ -314,6 +418,9 @@ private struct NewTaskSheet: View {
                              authorID: currentUser.id, authorName: currentUser.name)
         context.insert(task)
         syncService?.pushTask(task)
+        if hasDeadline {
+            NotificationScheduler.scheduleDeadlineReminder(for: task)
+        }
 
         let event = ActivityEvent(authorID: currentUser.id, authorName: currentUser.name, kind: .taskCreated,
                                    message: "created task: \(title)")
