@@ -1,11 +1,9 @@
 # project.yml
 # XcodeGen spec.
 #
-# NEW: switched from the auto-generated blank launch screen
-# (INFOPLIST_KEY_UILaunchScreen_Generation) to a custom
-# LaunchScreen.storyboard (UILaunchStoryboardName) — a branded navy
-# splash screen with the app name, using zero image assets so it can't
-# hit the same exact-pixel-size validation issue the app icon did.
+# Re-enabled the custom LaunchScreen.storyboard (navy background, SF
+# Symbol badge, team name, accent bar). Also added NSFaceIDUsageDescription
+# for the new Face ID app-lock feature.
 
 name: FTCTeamHub
 options:
@@ -50,6 +48,7 @@ targets:
           - UIInterfaceOrientationPortrait
         UIRequiresFullScreen: true
         NSCameraUsageDescription: "FTC Team Hub uses the camera to scan QR labels on inventory items for quick check-in and check-out."
+        NSFaceIDUsageDescription: "FTC Team Hub uses Face ID to keep team data private."
 
 schemes:
   FTCTeamHub:
