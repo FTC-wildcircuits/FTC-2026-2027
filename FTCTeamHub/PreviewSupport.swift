@@ -2,8 +2,9 @@
 //  PreviewSupport.swift
 //  FTCTeamHub
 //
-//  NEW: schema includes Battery, ChecklistRun, InventoryItem, plus sample
-//  data for each so their views preview correctly in Xcode.
+//  NEW: schema includes ScoringElement, with sample point values filled
+//  in (unlike the real app's zeroed defaults) so the Scoring Simulator
+//  preview looks realistic.
 //
 
 import Foundation
@@ -14,7 +15,9 @@ func makePreviewContainer() -> ModelContainer {
     let schema = Schema([
         AppUser.self, TaskItem.self, NotebookEntry.self,
         TestRunRecord.self, Idea.self, ActivityEvent.self, TrackedTeam.self,
-        Battery.self, ChecklistRun.self, InventoryItem.self
+        Battery.self, ChecklistRun.self, InventoryItem.self,
+        TeamSettings.self, Sponsor.self, BudgetExpense.self,
+        ScoringElement.self
     ])
     let config = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
     let container = try! ModelContainer(for: schema, configurations: [config])
@@ -101,6 +104,23 @@ func makePreviewContainer() -> ModelContainer {
         itemResults: preFlight.defaultItems.map { ChecklistItemResult(text: $0, checked: true) },
         completedByID: sam.id, completedByName: sam.name
     ))
+
+    context.insert(TeamSettings(teamNumber: 24211, teamName: "Wild Circuits", rookieYear: 2026, seasonName: "2026-2027"))
+
+    context.insert(Sponsor(name: "Acme Robotics Supply", contactName: "Jamie Fields",
+                            contactEmail: "jamie@acmerobotics.com", pledgedAmount: 500, receivedAmount: 500,
+                            status: .received, notes: "Annual sponsor, provided REV hardware discount too."))
+    context.insert(Sponsor(name: "Local Credit Union", contactName: "Pat Nguyen",
+                            pledgedAmount: 750, receivedAmount: 0, status: .pledged))
+
+    context.insert(BudgetExpense(item: "FTC Registration Fee", amount: 275, category: "Registration", addedByName: priya.name))
+    context.insert(BudgetExpense(item: "REV Control Hub", amount: 250, category: "Hardware", addedByName: sam.name))
+
+    context.insert(ScoringElement(name: "Leave / Depart Start", phase: .autonomous, pointValue: 3, sortOrder: 0))
+    context.insert(ScoringElement(name: "Score Game Element (Auto)", phase: .autonomous, pointValue: 6, sortOrder: 1))
+    context.insert(ScoringElement(name: "Score Game Element (TeleOp)", phase: .teleop, pointValue: 3, sortOrder: 2))
+    context.insert(ScoringElement(name: "Park", phase: .endgame, pointValue: 5, sortOrder: 3))
+    context.insert(ScoringElement(name: "Climb / Hang", phase: .endgame, pointValue: 15, sortOrder: 4))
 
     try? context.save()
     return container
