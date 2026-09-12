@@ -1,155 +1,509 @@
 //
-//  PitOpsModels.swift
+//  PitOpsTabView.swift
 //  FTCTeamHub
 //
-//  Data models for the new Pit Ops tab: battery cycle tracking, pre/post
-//  flight checklists, and parts/tools inventory with QR labels.
+//  FIX 2: Even without `id: \.self`, ForEach(ChecklistType.allCases) kept
+//  resolving to the Binding<C>-based initializer, which means the
+//  compiler wasn't finding a valid non-binding match via the Identifiable
+//  conformance at all (most likely due to a duplicate/conflicting
+//  `ChecklistType` declaration somewhere else in the project — worth a
+//  repo-wide search for "enum ChecklistType" to confirm it's declared
+//  exactly once, in PitOpsModels.swift).
+//
+//  Robust fix that sidesteps the issue regardless of cause: explicitly
+//  supply `id: \.rawValue`. This routes to the completely different,
+//  unambiguous `ForEach(_:id:content:)` initializer that takes a plain
+//  KeyPath<Element, Hashable> — it has nothing to do with Identifiable or
+//  Binding, so it can't be confused with the Binding<C> overload.
 //
 
-import Foundation
+import SwiftUI
 import SwiftData
+import CoreImage.CIFilterBuiltins
+import UIKit
 
-// MARK: - Battery Cycle Tracker
+struct PitOpsTabView: View {
+    @State private var section: Section = .batteries
 
-enum BatteryStatus: String, Codable, CaseIterable, Identifiable {
-    case charged = "Charged"
-    case inUse = "In Use"
-    case charging = "Charging"
-    case dead = "Dead"
-    var id: String { rawValue }
+    enum Section: String, CaseIterable, Identifiable {
+        case batteries = "Batteries", checklists = "Checklists", inventory = "Inventory"
+        var id: String { rawValue }
+    }
 
-    var systemImage: String {
-        switch self {
-        case .charged: return "battery.100"
-        case .inUse: return "battery.75"
-        case .charging: return "battery.100.bolt"
-        case .dead: return "battery.0"
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: 0) {
+                Picker("Section", selection: $section) {
+                    ForEach(Section.allCases) { Text($0.rawValue).tag($0) }
+                }
+                .pickerStyle(.segmented)
+                .padding()
+
+                Divider()
+
+                switch section {
+                case .batteries: BatteryListView()
+                case .checklists: ChecklistsView()
+                case .inventory: InventoryListView()
+                }
+            }
+            .navigationTitle("Pit Ops")
         }
     }
 }
 
-@Model
-final class Battery {
-    @Attribute(.unique) var id: UUID
-    var label: String              // e.g. "B1"
-    var statusRaw: String
-    var cycleCount: Int
-    var lastChargedAt: Date?
-    var notes: String
-    var addedAt: Date
+// MARK: - Batteries
 
-    var status: BatteryStatus {
-        get { BatteryStatus(rawValue: statusRaw) ?? .charged }
-        set { statusRaw = newValue.rawValue }
-    }
+private struct BatteryListView: View {
+    @Query(sort: \Battery.label) private var batteries: [Battery]
+    @Query private var allTestRuns: [TestRunRecord]
+    @Environment(\.modelContext) private var context
+    @Environment(\.syncService) private var syncService
+    @Environment(AuthenticationManager.self) private var authManager
+    @State private var isPresentingNewBattery = false
 
-    init(id: UUID = UUID(), label: String, status: BatteryStatus = .charged,
-         cycleCount: Int = 0, lastChargedAt: Date? = nil, notes: String = "", addedAt: Date = .now) {
-        self.id = id
-        self.label = label
-        self.statusRaw = status.rawValue
-        self.cycleCount = cycleCount
-        self.lastChargedAt = lastChargedAt
-        self.notes = notes
-        self.addedAt = addedAt
+    var body: some View {
+        List {
+            if batteries.isEmpty {
+                EmptyStateView(icon: "battery.100", title: "No batteries tracked",
+                               subtitle: "Add your team's batteries to start tracking cycles and performance.",
+                               tint: .green, actionTitle: "Add Battery") { isPresentingNewBattery = true }
+                    .listRowSeparator(.hidden)
+            }
+            ForEach(batteries) { battery in
+                NavigationLink {
+                    BatteryDetailView(battery: battery, runsUsingThisBattery: allTestRuns.filter { $0.batteryLabel == battery.label })
+                } label: {
+                    BatteryRow(battery: battery)
+                }
+            }
+            Section {
+                Button { isPresentingNewBattery = true } label: {
+                    Label("Add Battery", systemImage: "plus")
+                }
+            }
+        }
+        .listStyle(.insetGrouped)
+        .sheet(isPresented: $isPresentingNewBattery) { NewBatterySheet() }
     }
 }
 
-// MARK: - Pre/Post-Flight Checklists
+private struct BatteryRow: View {
+    @Bindable var battery: Battery
+    @Environment(\.modelContext) private var context
+    @Environment(\.syncService) private var syncService
+    @Environment(AuthenticationManager.self) private var authManager
 
-enum ChecklistType: String, Codable, CaseIterable {
-    case preFlight = "Pre-Flight"
-    case postFlight = "Post-Flight"
+    private var statusColor: Color {
+        switch battery.status {
+        case .charged: return .green
+        case .inUse: return .blue
+        case .charging: return .orange
+        case .dead: return .red
+        }
+    }
 
-    /// Default items shown when starting a new checklist run. Teams can
-    /// extend this list later; kept as static constants for now to avoid
-    /// adding an editable-template layer before the core feature is proven.
-    var defaultItems: [String] {
-        switch self {
-        case .preFlight:
-            return [
-                "Set screws tightened",
-                "Chains / belts tensioned",
-                "Battery voltage checked (12.0V+)",
-                "Phone / Control Hub mount secured",
-                "Code configuration verified",
-                "Bumpers on and legal",
-                "Wiring inspected, no loose connectors"
-            ]
-        case .postFlight:
-            return [
-                "Battery removed and placed on charger",
-                "Field-damage inspection",
-                "Loose hardware check",
-                "Notes logged for next match"
-            ]
+    var body: some View {
+        HStack {
+            Image(systemName: battery.status.systemImage)
+                .foregroundStyle(statusColor)
+                .font(.title3)
+                .frame(width: 28)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(battery.label).font(.body.weight(.semibold))
+                Text("\(battery.cycleCount) cycles").font(.caption).foregroundStyle(.secondary)
+            }
+            Spacer()
+            Menu {
+                ForEach(BatteryStatus.allCases) { status in
+                    Button(status.rawValue) { setStatus(status) }
+                }
+            } label: {
+                Text(battery.status.rawValue)
+                    .font(.caption.weight(.medium))
+                    .padding(.horizontal, 10).padding(.vertical, 5)
+                    .background(statusColor.opacity(0.15), in: Capsule())
+                    .foregroundStyle(statusColor)
+            }
+        }
+        .padding(.vertical, 2)
+    }
+
+    private func setStatus(_ status: BatteryStatus) {
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        battery.status = status
+        if status == .charged { battery.lastChargedAt = .now }
+        if status == .inUse { battery.cycleCount += 1 }
+        syncService?.pushBattery(battery)
+
+        if let user = authManager.currentUser {
+            let event = ActivityEvent(authorID: user.id, authorName: user.name, kind: .batteryStatusChanged,
+                                       message: "marked battery \(battery.label) as \(status.rawValue)")
+            context.insert(event)
+            syncService?.pushActivity(event)
         }
     }
 }
 
-struct ChecklistItemResult: Codable, Hashable, Identifiable {
-    var id: UUID = UUID()
-    var text: String
-    var checked: Bool
+private struct BatteryDetailView: View {
+    let battery: Battery
+    let runsUsingThisBattery: [TestRunRecord]
+
+    private var averageTotalScore: Double {
+        guard !runsUsingThisBattery.isEmpty else { return 0 }
+        let total = runsUsingThisBattery.reduce(0) { $0 + $1.totalScore }
+        return Double(total) / Double(runsUsingThisBattery.count)
+    }
+
+    var body: some View {
+        List {
+            Section("Overview") {
+                LabeledContent("Status", value: battery.status.rawValue)
+                LabeledContent("Cycle count", value: "\(battery.cycleCount)")
+                if let lastCharged = battery.lastChargedAt {
+                    LabeledContent("Last charged", value: lastCharged.formatted(date: .abbreviated, time: .shortened))
+                }
+            }
+            Section("Performance (\(runsUsingThisBattery.count) run\(runsUsingThisBattery.count == 1 ? "" : "s"))") {
+                if runsUsingThisBattery.isEmpty {
+                    Text("No test runs logged with this battery yet.").font(.footnote).foregroundStyle(.secondary)
+                } else {
+                    LabeledContent("Avg total score", value: String(format: "%.1f", averageTotalScore))
+                    if battery.cycleCount > 30 && averageTotalScore < 40 {
+                        Label("High cycle count with low scores — consider retiring this cell.", systemImage: "exclamationmark.triangle.fill")
+                            .font(.caption).foregroundStyle(.red)
+                    }
+                }
+            }
+            if !battery.notes.isEmpty {
+                Section("Notes") { Text(battery.notes) }
+            }
+        }
+        .navigationTitle(battery.label)
+    }
 }
 
-@Model
-final class ChecklistRun {
-    @Attribute(.unique) var id: UUID
-    var typeRaw: String
-    var itemResults: [ChecklistItemResult]
-    var completedByID: UUID
-    var completedByName: String
-    var timestamp: Date
+private struct NewBatterySheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var context
+    @Environment(\.syncService) private var syncService
+    @State private var label = ""
+    @State private var notes = ""
 
-    var type: ChecklistType {
-        get { ChecklistType(rawValue: typeRaw) ?? .preFlight }
-        set { typeRaw = newValue.rawValue }
+    var body: some View {
+        NavigationStack {
+            Form {
+                TextField("Label (e.g. B1)", text: $label)
+                TextField("Notes", text: $notes, axis: .vertical)
+            }
+            .navigationTitle("New Battery")
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Save") { save() }.disabled(label.isEmpty)
+                }
+            }
+        }
     }
 
-    var allChecked: Bool { itemResults.allSatisfy { $0.checked } }
-
-    init(id: UUID = UUID(), type: ChecklistType, itemResults: [ChecklistItemResult],
-         completedByID: UUID, completedByName: String, timestamp: Date = .now) {
-        self.id = id
-        self.typeRaw = type.rawValue
-        self.itemResults = itemResults
-        self.completedByID = completedByID
-        self.completedByName = completedByName
-        self.timestamp = timestamp
+    private func save() {
+        let battery = Battery(label: label, notes: notes)
+        context.insert(battery)
+        syncService?.pushBattery(battery)
+        dismiss()
     }
 }
 
-// MARK: - Parts & Tools Inventory
+// MARK: - Checklists
 
-@Model
-final class InventoryItem {
-    @Attribute(.unique) var id: UUID
-    var name: String
-    var category: String           // free text, e.g. "Electronics", "Printed Parts", "Tools"
-    var binLocation: String
-    var quantity: Int
-    var isCheckedOut: Bool
-    var checkedOutByName: String
-    var notes: String
-    var addedAt: Date
+private struct ChecklistsView: View {
+    @Query(sort: \ChecklistRun.timestamp, order: .reverse) private var runs: [ChecklistRun]
+    @State private var activeChecklistType: ChecklistType?
 
-    init(id: UUID = UUID(), name: String, category: String, binLocation: String,
-         quantity: Int = 1, isCheckedOut: Bool = false, checkedOutByName: String = "",
-         notes: String = "", addedAt: Date = .now) {
-        self.id = id
-        self.name = name
-        self.category = category
-        self.binLocation = binLocation
-        self.quantity = quantity
-        self.isCheckedOut = isCheckedOut
-        self.checkedOutByName = checkedOutByName
-        self.notes = notes
-        self.addedAt = addedAt
+    var body: some View {
+        List {
+            Section {
+                ForEach(ChecklistType.allCases, id: \.rawValue) { type in
+                    Button {
+                        activeChecklistType = type
+                    } label: {
+                        Label("Start \(type.rawValue) Checklist", systemImage: type.systemImage)
+                    }
+                }
+            }
+
+            Section("Recent Checklists") {
+                if runs.isEmpty {
+                    Text("No checklists completed yet.").font(.footnote).foregroundStyle(.secondary)
+                }
+                ForEach(runs) { run in
+                    HStack {
+                        Image(systemName: run.allChecked ? "checkmark.circle.fill" : "exclamationmark.circle.fill")
+                            .foregroundStyle(run.allChecked ? .green : .orange)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(run.type.rawValue).font(.subheadline.weight(.medium))
+                            Text("\(run.completedByName) · \(run.timestamp.formatted(date: .abbreviated, time: .shortened))")
+                                .font(.caption2).foregroundStyle(.secondary)
+                        }
+                    }
+                }
+            }
+        }
+        .listStyle(.insetGrouped)
+        .sheet(item: $activeChecklistType) { type in
+            ChecklistRunSheet(type: type)
+        }
+    }
+}
+
+extension ChecklistType: Identifiable {
+    public var id: String { rawValue }
+}
+
+private struct ChecklistRunSheet: View {
+    let type: ChecklistType
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var context
+    @Environment(\.syncService) private var syncService
+    @Environment(AuthenticationManager.self) private var authManager
+    @State private var checkedStates: [Bool]
+
+    init(type: ChecklistType) {
+        self.type = type
+        _checkedStates = State(initialValue: Array(repeating: false, count: type.defaultItems.count))
     }
 
-    /// The QR label encodes the item's own UUID — scanning it (or just
-    /// printing it on a bin/part label) lets you look the item straight up
-    /// by ID rather than typing a name.
-    var qrPayload: String { "ftcteamhub:item:\(id.uuidString)" }
+    private var allChecked: Bool { checkedStates.allSatisfy { $0 } }
+
+    var body: some View {
+        NavigationStack {
+            List {
+                ForEach(Array(type.defaultItems.enumerated()), id: \.offset) { index, item in
+                    Button {
+                        checkedStates[index].toggle()
+                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                    } label: {
+                        HStack {
+                            Image(systemName: checkedStates[index] ? "checkmark.square.fill" : "square")
+                                .foregroundStyle(checkedStates[index] ? .green : .secondary)
+                            Text(item).foregroundStyle(.primary)
+                        }
+                    }
+                }
+            }
+            .navigationTitle(type.rawValue)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Submit") { submit() }
+                }
+            }
+            .safeAreaInset(edge: .bottom) {
+                if !allChecked {
+                    Text("All items should be checked before the robot leaves the pit.")
+                        .font(.caption)
+                        .foregroundStyle(.orange)
+                        .padding()
+                        .frame(maxWidth: .infinity)
+                        .background(.thinMaterial)
+                }
+            }
+        }
+    }
+
+    private func submit() {
+        guard let user = authManager.currentUser else { return }
+        let results = zip(type.defaultItems, checkedStates).map { ChecklistItemResult(text: $0, checked: $1) }
+        let run = ChecklistRun(type: type, itemResults: results, completedByID: user.id, completedByName: user.name)
+        context.insert(run)
+        syncService?.pushChecklistRun(run)
+
+        let event = ActivityEvent(authorID: user.id, authorName: user.name, kind: .checklistCompleted,
+                                   message: "completed \(type.rawValue) checklist" + (allChecked ? "" : " (incomplete)"))
+        context.insert(event)
+        syncService?.pushActivity(event)
+
+        UINotificationFeedbackGenerator().notificationOccurred(allChecked ? .success : .warning)
+        dismiss()
+    }
+}
+
+// MARK: - Inventory
+
+private struct InventoryListView: View {
+    @Query(sort: \InventoryItem.name) private var items: [InventoryItem]
+    @State private var isPresentingNewItem = false
+    @State private var isPresentingScanner = false
+
+    var body: some View {
+        List {
+            if items.isEmpty {
+                EmptyStateView(icon: "shippingbox", title: "No items tracked",
+                               subtitle: "Log expensive or easy-to-lose parts here.",
+                               tint: .orange, actionTitle: "Add Item") { isPresentingNewItem = true }
+                    .listRowSeparator(.hidden)
+            }
+            ForEach(items) { item in
+                NavigationLink {
+                    InventoryDetailView(item: item)
+                } label: {
+                    InventoryRow(item: item)
+                }
+            }
+            Section {
+                Button { isPresentingNewItem = true } label: {
+                    Label("Add Item", systemImage: "plus")
+                }
+            }
+        }
+        .listStyle(.insetGrouped)
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                Button { isPresentingScanner = true } label: {
+                    Label("Scan", systemImage: "qrcode.viewfinder")
+                }
+            }
+        }
+        .sheet(isPresented: $isPresentingNewItem) { NewInventoryItemSheet() }
+        .fullScreenCover(isPresented: $isPresentingScanner) { QRCheckInOutView() }
+    }
+}
+
+private struct InventoryRow: View {
+    let item: InventoryItem
+
+    var body: some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(item.name).font(.body.weight(.medium))
+                Text("\(item.category) · Bin \(item.binLocation)").font(.caption).foregroundStyle(.secondary)
+            }
+            Spacer()
+            if item.isCheckedOut {
+                Text("Checked out")
+                    .font(.caption2.weight(.medium))
+                    .padding(.horizontal, 8).padding(.vertical, 3)
+                    .background(.orange.opacity(0.15), in: Capsule())
+                    .foregroundStyle(.orange)
+            }
+        }
+        .padding(.vertical, 2)
+    }
+}
+
+private struct InventoryDetailView: View {
+    @Bindable var item: InventoryItem
+    @Environment(\.modelContext) private var context
+    @Environment(\.syncService) private var syncService
+    @Environment(AuthenticationManager.self) private var authManager
+
+    var body: some View {
+        List {
+            Section("Details") {
+                LabeledContent("Category", value: item.category)
+                LabeledContent("Bin location", value: item.binLocation)
+                LabeledContent("Quantity", value: "\(item.quantity)")
+                if !item.notes.isEmpty { LabeledContent("Notes", value: item.notes) }
+            }
+
+            Section("QR Label") {
+                if let qrImage = QRCodeGenerator.generate(from: item.qrPayload) {
+                    HStack {
+                        Spacer()
+                        Image(uiImage: qrImage)
+                            .interpolation(.none)
+                            .resizable()
+                            .frame(width: 160, height: 160)
+                        Spacer()
+                    }
+                    ShareLink(item: Image(uiImage: qrImage), preview: SharePreview("\(item.name) QR Label", image: Image(uiImage: qrImage))) {
+                        Label("Print / Share Label", systemImage: "square.and.arrow.up")
+                    }
+                }
+            }
+
+            Section {
+                Button {
+                    toggleCheckout()
+                } label: {
+                    Label(item.isCheckedOut ? "Check In" : "Check Out", systemImage: item.isCheckedOut ? "arrow.uturn.down" : "arrow.up.right")
+                }
+            }
+        }
+        .navigationTitle(item.name)
+    }
+
+    private func toggleCheckout() {
+        guard let user = authManager.currentUser else { return }
+        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+        item.isCheckedOut.toggle()
+        item.checkedOutByName = item.isCheckedOut ? user.name : ""
+        syncService?.pushInventoryItem(item)
+
+        let event = ActivityEvent(authorID: user.id, authorName: user.name, kind: .inventoryUpdated,
+                                   message: item.isCheckedOut ? "checked out: \(item.name)" : "returned: \(item.name)")
+        context.insert(event)
+        syncService?.pushActivity(event)
+    }
+}
+
+private struct NewInventoryItemSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var context
+    @Environment(\.syncService) private var syncService
+    @State private var name = ""
+    @State private var category = ""
+    @State private var binLocation = ""
+    @State private var quantity = 1
+    @State private var notes = ""
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                TextField("Name", text: $name)
+                TextField("Category (e.g. Electronics)", text: $category)
+                TextField("Bin location (e.g. Shelf 2, Bin B)", text: $binLocation)
+                Stepper("Quantity: \(quantity)", value: $quantity, in: 1...100)
+                TextField("Notes", text: $notes, axis: .vertical)
+            }
+            .navigationTitle("New Item")
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Save") { save() }.disabled(name.isEmpty)
+                }
+            }
+        }
+    }
+
+    private func save() {
+        let item = InventoryItem(name: name, category: category.isEmpty ? "Uncategorized" : category,
+                                  binLocation: binLocation, quantity: quantity, notes: notes)
+        context.insert(item)
+        syncService?.pushInventoryItem(item)
+        dismiss()
+    }
+}
+
+// MARK: - QR generation helper
+
+enum QRCodeGenerator {
+    static func generate(from string: String) -> UIImage? {
+        let context = CIContext()
+        let filter = CIFilter.qrCodeGenerator()
+        filter.message = Data(string.utf8)
+        filter.correctionLevel = "M"
+        guard let outputImage = filter.outputImage else { return nil }
+        let transformed = outputImage.transformed(by: CGAffineTransform(scaleX: 10, y: 10))
+        guard let cgImage = context.createCGImage(transformed, from: transformed.extent) else { return nil }
+        return UIImage(cgImage: cgImage)
+    }
+}
+
+#Preview {
+    let container = makePreviewContainer()
+    let authManager = AuthenticationManager(modelContext: container.mainContext)
+    return PitOpsTabView()
+        .modelContainer(container)
+        .environment(authManager)
 }
