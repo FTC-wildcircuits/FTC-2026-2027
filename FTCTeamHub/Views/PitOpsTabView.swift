@@ -2,8 +2,12 @@
 //  PitOpsTabView.swift
 //  FTCTeamHub
 //
-//  NEW: Inventory section now has a dedicated "Scan" button that opens
-//  the camera-based QR check-in/check-out flow (QRCheckInOutView).
+//  FIX: `ForEach(ChecklistType.allCases, id: \.self)` caused an overload
+//  ambiguity error because ChecklistType already conforms to Identifiable
+//  (see the extension below) — explicitly passing `id: \.self` alongside
+//  that conformance confused the compiler into trying to match the
+//  Binding<C>-based ForEach initializer instead of the plain collection
+//  one. Fix: drop `id: \.self` entirely and let it use Identifiable.
 //
 
 import SwiftUI
@@ -212,7 +216,7 @@ private struct ChecklistsView: View {
     var body: some View {
         List {
             Section {
-                ForEach(ChecklistType.allCases, id: \.self) { type in
+                ForEach(ChecklistType.allCases) { type in
                     Button {
                         activeChecklistType = type
                     } label: {
