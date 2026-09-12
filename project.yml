@@ -1,8 +1,14 @@
 # project.yml
-# XcodeGen spec. NEW: NSCameraUsageDescription added — required at runtime
-# for the QR check-in/check-out scanner (VisionKit DataScannerViewController).
-# Without this key, iOS silently kills the app the instant camera access
-# is requested — always add a usage description BEFORE using any camera API.
+# XcodeGen spec.
+#
+# NOTE: ASSETCATALOG_COMPILER_APPICON_NAME is intentionally OMITTED for now.
+# That setting tells Xcode "use an icon set called AppIcon" — if no such
+# icon set actually exists in Assets.xcassets, the build fails outright.
+# Since the app icon assets haven't been added yet, this version builds
+# fine with iOS's default gray placeholder icon. Once you complete
+# APP_ICON_SETUP.md (adding Assets.xcassets/AppIcon.appiconset/...), add
+# this one line back under settings.base:
+#   ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
 
 name: FTCTeamHub
 options:
@@ -34,7 +40,6 @@ targets:
         SWIFT_VERSION: "5.0"
         TARGETED_DEVICE_FAMILY: "1,2"
         INFOPLIST_KEY_UILaunchScreen_Generation: "YES"
-        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         CODE_SIGNING_ALLOWED: NO
         CODE_SIGNING_REQUIRED: NO
         CODE_SIGN_IDENTITY: ""
