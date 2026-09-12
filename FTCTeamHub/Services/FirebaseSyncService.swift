@@ -2,21 +2,8 @@
 //  FirebaseSyncService.swift
 //  FTCTeamHub
 //
-//  Cross-device backend sync using Firebase Firestore.
-//
-//  NEW: Team roster (`AppUser`) now syncs too. Every sign-up pushes the
-//  user's profile (including password hash — see security note below) to
-//  Firestore, and every device listens for other members' profiles so the
-//  Roster tab shows the whole team regardless of which device each person
-//  signed up on, AND so any team member can sign in from any device.
-//
-//  SECURITY NOTE: syncing the SHA256 password hash (not the plaintext
-//  password) to Firestore is what makes "sign in from any device" work —
-//  without it, a device that never saw a given signup could never verify
-//  that user's password locally. This is an acceptable tradeoff for a
-//  small internal team tool behind Firestore rules that are not publicly
-//  exposed, but is NOT bank-grade security — don't reuse this pattern for
-//  anything storing real user passwords at wider scale.
+//  NEW: added sync for Battery, ChecklistRun, and InventoryItem (Pit Ops
+//  tab), following the exact same push/listen pattern as everything else.
 //
 
 import Foundation
@@ -33,6 +20,9 @@ final class FirebaseSyncService {
     private var notebookListener: ListenerRegistration?
     private var ideaListener: ListenerRegistration?
     private var testRunListener: ListenerRegistration?
+    private var batteryListener: ListenerRegistration?
+    private var checklistListener: ListenerRegistration?
+    private var inventoryListener: ListenerRegistration?
     private weak var modelContext: ModelContext?
 
     func start(modelContext: ModelContext) {
@@ -43,6 +33,9 @@ final class FirebaseSyncService {
         listenForNotebookChanges()
         listenForIdeaChanges()
         listenForTestRunChanges()
+        listenForBatteryChanges()
+        listenForChecklistChanges()
+        listenForInventoryChanges()
     }
 
     func stop() {
@@ -52,6 +45,9 @@ final class FirebaseSyncService {
         notebookListener?.remove()
         ideaListener?.remove()
         testRunListener?.remove()
+        batteryListener?.remove()
+        checklistListener?.remove()
+        inventoryListener?.remove()
     }
 
     // MARK: - Roster (AppUser)
@@ -305,7 +301,7 @@ final class FirebaseSyncService {
     // MARK: - Test runs
 
     func pushTestRun(_ record: TestRunRecord) {
-        let data: [String: Any] = [
+        var data: [String: Any] = [
             "driverID": record.driverID.uuidString,
             "driverName": record.driverName,
             "date": record.date,
@@ -319,6 +315,7 @@ final class FirebaseSyncService {
             "recordedByID": record.recordedByID.uuidString,
             "recordedByName": record.recordedByName
         ]
+        data["batteryLabel"] = record.batteryLabel ?? ""
         db.collection("testRuns").document(record.id.uuidString).setData(data, merge: true)
     }
 
@@ -340,6 +337,8 @@ final class FirebaseSyncService {
         guard let driverID = UUID(uuidString: data["driverID"] as? String ?? ""),
               let recordedByID = UUID(uuidString: data["recordedByID"] as? String ?? "") else { return }
 
+        let batteryLabelRaw = data["batteryLabel"] as? String ?? ""
+
         let record = TestRunRecord(
             id: id, driverID: driverID, driverName: data["driverName"] as? String ?? "",
             date: (data["date"] as? Timestamp)?.dateValue() ?? .now,
@@ -350,9 +349,145 @@ final class FirebaseSyncService {
             autoConsistencyPercent: data["autoConsistencyPercent"] as? Double ?? 0,
             mechanicalIssues: data["mechanicalIssues"] as? [String] ?? [],
             notes: data["notes"] as? String ?? "",
-            recordedByID: recordedByID, recordedByName: data["recordedByName"] as? String ?? ""
+            recordedByID: recordedByID, recordedByName: data["recordedByName"] as? String ?? "",
+            batteryLabel: batteryLabelRaw.isEmpty ? nil : batteryLabelRaw
         )
         context.insert(record)
+        try? context.save()
+    }
+
+    // MARK: - Batteries
+
+    func pushBattery(_ battery: Battery) {
+        let data: [String: Any] = [
+            "label": battery.label,
+            "statusRaw": battery.statusRaw,
+            "cycleCount": battery.cycleCount,
+            "lastChargedAt": battery.lastChargedAt as Any,
+            "notes": battery.notes,
+            "addedAt": battery.addedAt
+        ]
+        db.collection("batteries").document(battery.id.uuidString).setData(data, merge: true)
+    }
+
+    private func listenForBatteryChanges() {
+        batteryListener = db.collection("batteries").addSnapshotListener { [weak self] snapshot, error in
+            guard let self, let snapshot, error == nil else { return }
+            for change in snapshot.documentChanges {
+                self.upsertBattery(from: change.document)
+            }
+        }
+    }
+
+    private func upsertBattery(from document: QueryDocumentSnapshot) {
+        guard let context = modelContext, let id = UUID(uuidString: document.documentID) else { return }
+        let data = document.data()
+
+        let descriptor = FetchDescriptor<Battery>(predicate: #Predicate { $0.id == id })
+        let existing = try? context.fetch(descriptor).first
+
+        let battery = existing ?? Battery(id: id, label: data["label"] as? String ?? "")
+        battery.label = data["label"] as? String ?? battery.label
+        battery.statusRaw = data["statusRaw"] as? String ?? battery.statusRaw
+        battery.cycleCount = data["cycleCount"] as? Int ?? battery.cycleCount
+        battery.lastChargedAt = (data["lastChargedAt"] as? Timestamp)?.dateValue()
+        battery.notes = data["notes"] as? String ?? battery.notes
+
+        if existing == nil { context.insert(battery) }
+        try? context.save()
+    }
+
+    // MARK: - Checklists
+
+    func pushChecklistRun(_ run: ChecklistRun) {
+        var data: [String: Any] = [
+            "typeRaw": run.typeRaw,
+            "completedByID": run.completedByID.uuidString,
+            "completedByName": run.completedByName,
+            "timestamp": run.timestamp
+        ]
+        if let encoded = try? JSONEncoder().encode(run.itemResults) {
+            data["itemResults"] = String(data: encoded, encoding: .utf8)
+        }
+        db.collection("checklists").document(run.id.uuidString).setData(data, merge: true)
+    }
+
+    private func listenForChecklistChanges() {
+        checklistListener = db.collection("checklists").addSnapshotListener { [weak self] snapshot, error in
+            guard let self, let snapshot, error == nil else { return }
+            for change in snapshot.documentChanges where change.type == .added {
+                self.insertChecklistRunIfNeeded(from: change.document)
+            }
+        }
+    }
+
+    private func insertChecklistRunIfNeeded(from document: QueryDocumentSnapshot) {
+        guard let context = modelContext, let id = UUID(uuidString: document.documentID) else { return }
+        let descriptor = FetchDescriptor<ChecklistRun>(predicate: #Predicate { $0.id == id })
+        guard (try? context.fetch(descriptor).first) == nil else { return }
+
+        let data = document.data()
+        guard let completedByID = UUID(uuidString: data["completedByID"] as? String ?? ""),
+              let typeRaw = data["typeRaw"] as? String,
+              let type = ChecklistType(rawValue: typeRaw) else { return }
+
+        var results: [ChecklistItemResult] = []
+        if let raw = data["itemResults"] as? String, let json = raw.data(using: .utf8) {
+            results = (try? JSONDecoder().decode([ChecklistItemResult].self, from: json)) ?? []
+        }
+
+        let run = ChecklistRun(
+            id: id, type: type, itemResults: results,
+            completedByID: completedByID, completedByName: data["completedByName"] as? String ?? "",
+            timestamp: (data["timestamp"] as? Timestamp)?.dateValue() ?? .now
+        )
+        context.insert(run)
+        try? context.save()
+    }
+
+    // MARK: - Inventory
+
+    func pushInventoryItem(_ item: InventoryItem) {
+        let data: [String: Any] = [
+            "name": item.name,
+            "category": item.category,
+            "binLocation": item.binLocation,
+            "quantity": item.quantity,
+            "isCheckedOut": item.isCheckedOut,
+            "checkedOutByName": item.checkedOutByName,
+            "notes": item.notes,
+            "addedAt": item.addedAt
+        ]
+        db.collection("inventory").document(item.id.uuidString).setData(data, merge: true)
+    }
+
+    private func listenForInventoryChanges() {
+        inventoryListener = db.collection("inventory").addSnapshotListener { [weak self] snapshot, error in
+            guard let self, let snapshot, error == nil else { return }
+            for change in snapshot.documentChanges {
+                self.upsertInventoryItem(from: change.document)
+            }
+        }
+    }
+
+    private func upsertInventoryItem(from document: QueryDocumentSnapshot) {
+        guard let context = modelContext, let id = UUID(uuidString: document.documentID) else { return }
+        let data = document.data()
+
+        let descriptor = FetchDescriptor<InventoryItem>(predicate: #Predicate { $0.id == id })
+        let existing = try? context.fetch(descriptor).first
+
+        let item = existing ?? InventoryItem(id: id, name: data["name"] as? String ?? "",
+                                              category: data["category"] as? String ?? "", binLocation: "")
+        item.name = data["name"] as? String ?? item.name
+        item.category = data["category"] as? String ?? item.category
+        item.binLocation = data["binLocation"] as? String ?? item.binLocation
+        item.quantity = data["quantity"] as? Int ?? item.quantity
+        item.isCheckedOut = data["isCheckedOut"] as? Bool ?? item.isCheckedOut
+        item.checkedOutByName = data["checkedOutByName"] as? String ?? item.checkedOutByName
+        item.notes = data["notes"] as? String ?? item.notes
+
+        if existing == nil { context.insert(item) }
         try? context.save()
     }
 }
