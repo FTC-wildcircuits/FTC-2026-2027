@@ -3,9 +3,15 @@
   LaunchScreen.storyboard
   FTCTeamHub
 
-  Branded splash: deep navy background, a large white SF Symbol badge
-  (gearshape.2.fill, referenced as a system symbol — no image assets
-  needed), team name, tagline, and a thin accent bar for polish.
+  Branded splash, take 2: navy background, a large circular SF Symbol
+  (gearshape.circle.fill — circular by design, so no cornerRadius hack
+  needed), team name, tagline, and a thin accent bar.
+
+  IMPORTANT: launch screen storyboards cannot contain
+  userDefinedRuntimeAttributes (no runtime code is allowed to execute
+  before the app finishes launching) — that's what broke the previous
+  version. Every visual effect here is achieved with plain, static
+  Interface Builder attributes only.
 
   NOTE: iOS caches the launch screen snapshot per-install. If you rebuild
   and don't see this, fully delete the app from the simulator/device
@@ -25,71 +31,42 @@
                         <rect key="frame" x="0.0" y="0.0" width="393" height="852"/>
                         <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
                         <subviews>
-                            <view contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="badge-circle">
-                                <rect key="frame" x="146.5" y="330" width="100" height="100"/>
-                                <color key="backgroundColor" red="0.18" green="0.32" blue="0.58" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
+                            <imageView opaque="NO" clipsSubviews="YES" userInteractionEnabled="NO" contentMode="scaleAspectFit" horizontalHuggingPriority="251" verticalHuggingPriority="251" translatesAutoresizingMaskIntoConstraints="NO" image="gearshape.circle.fill" catalog="system" id="badge-icon">
+                                <rect key="frame" x="156.5" y="330" width="80" height="80"/>
+                                <color key="tintColor" white="1" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
                                 <constraints>
-                                    <constraint firstAttribute="width" constant="100" id="badge-w"/>
-                                    <constraint firstAttribute="height" constant="100" id="badge-h"/>
+                                    <constraint firstAttribute="width" constant="80" id="icon-w"/>
+                                    <constraint firstAttribute="height" constant="80" id="icon-h"/>
                                 </constraints>
-                                <subviews>
-                                    <imageView opaque="NO" clipsSubviews="YES" userInteractionEnabled="NO" contentMode="scaleAspectFit" horizontalHuggingPriority="251" verticalHuggingPriority="251" translatesAutoresizingMaskIntoConstraints="NO" image="gearshape.2.fill" catalog="system" id="badge-icon">
-                                        <rect key="frame" x="24" y="24" width="52" height="52"/>
-                                        <color key="tintColor" white="1" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
-                                        <constraints>
-                                            <constraint firstAttribute="width" constant="52" id="icon-w"/>
-                                            <constraint firstAttribute="height" constant="52" id="icon-h"/>
-                                        </constraints>
-                                    </imageView>
-                                </subviews>
-                                <constraints>
-                                    <constraint firstItem="badge-icon" firstAttribute="centerX" secondItem="badge-circle" secondAttribute="centerX" id="icon-cx"/>
-                                    <constraint firstItem="badge-icon" firstAttribute="centerY" secondItem="badge-circle" secondAttribute="centerY" id="icon-cy"/>
-                                </constraints>
-                                <userDefinedRuntimeAttributes>
-                                    <userDefinedRuntimeAttribute type="number" keyPath="layer.cornerRadius">
-                                        <real key="value" value="50"/>
-                                    </userDefinedRuntimeAttribute>
-                                </userDefinedRuntimeAttributes>
-                            </view>
+                            </imageView>
                             <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="FTC TEAM HUB" textAlignment="center" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="lbl-title">
-                                <rect key="frame" x="46.5" y="446" width="300" height="34"/>
+                                <rect key="frame" x="46.5" y="426" width="300" height="34"/>
                                 <fontDescription key="fontDescription" type="system" weight="heavy" pointSize="26"/>
                                 <color key="textColor" white="1" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
                                 <nil key="highlightedColor"/>
                             </label>
                             <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="TEAM MANAGEMENT &amp; COLLABORATION" textAlignment="center" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="lbl-subtitle">
-                                <rect key="frame" x="46.5" y="484" width="300" height="16"/>
+                                <rect key="frame" x="46.5" y="464" width="300" height="16"/>
                                 <fontDescription key="fontDescription" type="system" weight="semibold" pointSize="11"/>
-                                <color key="textColor" red="0.62" green="0.72" blue="0.88" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
+                                <color key="textColor" red="0.62" green="0.72" blue="0.88" alpha="0.85" colorSpace="custom" customColorSpace="sRGB"/>
                                 <nil key="highlightedColor"/>
-                                <userDefinedRuntimeAttributes>
-                                    <userDefinedRuntimeAttribute type="number" keyPath="layer.opacity">
-                                        <real key="value" value="0.85"/>
-                                    </userDefinedRuntimeAttribute>
-                                </userDefinedRuntimeAttributes>
                             </label>
                             <view contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="accent-bar">
-                                <rect key="frame" x="166.5" y="518" width="60" height="4"/>
+                                <rect key="frame" x="166.5" y="498" width="60" height="3"/>
                                 <color key="backgroundColor" red="0.30" green="0.58" blue="0.95" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
                                 <constraints>
                                     <constraint firstAttribute="width" constant="60" id="accent-w"/>
-                                    <constraint firstAttribute="height" constant="4" id="accent-h"/>
+                                    <constraint firstAttribute="height" constant="3" id="accent-h"/>
                                 </constraints>
-                                <userDefinedRuntimeAttributes>
-                                    <userDefinedRuntimeAttribute type="number" keyPath="layer.cornerRadius">
-                                        <real key="value" value="2"/>
-                                    </userDefinedRuntimeAttribute>
-                                </userDefinedRuntimeAttributes>
                             </view>
                         </subviews>
                         <viewLayoutGuide key="safeArea" id="6Tk-OE-BBY"/>
                         <color key="backgroundColor" red="0.04705882353" green="0.09019607843" blue="0.1882352941" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
                         <constraints>
-                            <constraint firstItem="badge-circle" firstAttribute="centerX" secondItem="Ze5-6b-2t3" secondAttribute="centerX" id="c-badge-x"/>
-                            <constraint firstItem="badge-circle" firstAttribute="centerY" secondItem="Ze5-6b-2t3" secondAttribute="centerY" constant="-90" id="c-badge-y"/>
+                            <constraint firstItem="badge-icon" firstAttribute="centerX" secondItem="Ze5-6b-2t3" secondAttribute="centerX" id="c-badge-x"/>
+                            <constraint firstItem="badge-icon" firstAttribute="centerY" secondItem="Ze5-6b-2t3" secondAttribute="centerY" constant="-90" id="c-badge-y"/>
                             <constraint firstItem="lbl-title" firstAttribute="centerX" secondItem="Ze5-6b-2t3" secondAttribute="centerX" id="c-title-x"/>
-                            <constraint firstItem="lbl-title" firstAttribute="top" secondItem="badge-circle" secondAttribute="bottom" constant="16" id="c-title-y"/>
+                            <constraint firstItem="lbl-title" firstAttribute="top" secondItem="badge-icon" secondAttribute="bottom" constant="16" id="c-title-y"/>
                             <constraint firstItem="lbl-subtitle" firstAttribute="centerX" secondItem="Ze5-6b-2t3" secondAttribute="centerX" id="c-sub-x"/>
                             <constraint firstItem="lbl-subtitle" firstAttribute="top" secondItem="lbl-title" secondAttribute="bottom" constant="4" id="c-sub-y"/>
                             <constraint firstItem="accent-bar" firstAttribute="centerX" secondItem="Ze5-6b-2t3" secondAttribute="centerX" id="c-accent-x"/>
