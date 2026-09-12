@@ -2,9 +2,9 @@
 //  TestingTabView.swift
 //  FTCTeamHub
 //
-//  NEW: test run logging now includes an optional battery picker, so
-//  the Pit Ops battery detail view can correlate a battery with the
-//  match/practice scores it was used for.
+//  NEW: Analytics section now has a CSV export button producing a
+//  spreadsheet-ready file of every logged test run, for deeper analysis
+//  in Excel/Sheets than the in-app charts allow.
 //
 
 import SwiftUI
@@ -19,7 +19,7 @@ struct TestingTabView: View {
     @State private var section: Section = .log
 
     enum Section: String, CaseIterable, Identifiable {
-        case log = "Log Test", analytics = "Analytics"
+        case log = "Log Test", timer = "Match Timer", analytics = "Analytics"
         var id: String { rawValue }
     }
 
@@ -36,6 +36,7 @@ struct TestingTabView: View {
 
                 switch section {
                 case .log: TestLogForm(users: users, batteries: batteries)
+                case .timer: MatchTimerView()
                 case .analytics: TestingAnalyticsView(records: records)
                 }
             }
@@ -222,59 +223,72 @@ private struct IssueChipGrid: View {
 
 private struct TestingAnalyticsView: View {
     let records: [TestRunRecord]
+    @State private var exportURL: URL?
 
     var body: some View {
-        if records.isEmpty {
-            ContentUnavailableView(
-                "No test runs yet", systemImage: "chart.line.uptrend.xyaxis",
-                description: Text("Log a practice run to start tracking your robot's progress.")
-            )
-        } else {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 20) {
-                    GroupBox("Score Progression") {
-                        Chart {
-                            ForEach(records.sorted(by: { $0.date < $1.date })) { record in
-                                LineMark(x: .value("Date", record.date), y: .value("Score", record.autoScore))
-                                    .foregroundStyle(by: .value("Series", "Auto"))
-                                LineMark(x: .value("Date", record.date), y: .value("Score", record.teleopScore))
-                                    .foregroundStyle(by: .value("Series", "TeleOp"))
-                            }
-                        }
-                        .frame(height: 220)
-                        .padding(.top, 8)
-                    }
-
-                    GroupBox("Common Failures") {
-                        let counts = failureCounts
-                        if counts.isEmpty {
-                            Text("No failures logged yet — nice.")
-                                .font(.footnote)
-                                .foregroundStyle(.secondary)
-                                .padding(.vertical, 8)
-                        } else {
+        Group {
+            if records.isEmpty {
+                EmptyStateView(icon: "chart.line.uptrend.xyaxis", title: "No test runs yet",
+                               subtitle: "Log a practice run to start tracking your robot's progress.",
+                               tint: .blue)
+            } else {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 20) {
+                        GroupBox("Score Progression") {
                             Chart {
-                                ForEach(counts, id: \.issue) { item in
-                                    BarMark(x: .value("Count", item.count), y: .value("Issue", item.issue))
+                                ForEach(records.sorted(by: { $0.date < $1.date })) { record in
+                                    LineMark(x: .value("Date", record.date), y: .value("Score", record.autoScore))
+                                        .foregroundStyle(by: .value("Series", "Auto"))
+                                    LineMark(x: .value("Date", record.date), y: .value("Score", record.teleopScore))
+                                        .foregroundStyle(by: .value("Series", "TeleOp"))
                                 }
                             }
-                            .frame(height: CGFloat(counts.count * 34 + 20))
+                            .frame(height: 220)
                             .padding(.top, 8)
                         }
-                    }
 
-                    GroupBox("Averages") {
-                        VStack(alignment: .leading, spacing: 6) {
-                            LabeledContent("Avg Auto Score", value: String(format: "%.1f", average(\.autoScore)))
-                            LabeledContent("Avg TeleOp Score", value: String(format: "%.1f", average(\.teleopScore)))
-                            LabeledContent("Avg Cycle Time", value: String(format: "%.2fs", averageCycleTime))
-                            LabeledContent("Total Runs Logged", value: "\(records.count)")
+                        GroupBox("Common Failures") {
+                            let counts = failureCounts
+                            if counts.isEmpty {
+                                Text("No failures logged yet — nice.")
+                                    .font(.footnote)
+                                    .foregroundStyle(.secondary)
+                                    .padding(.vertical, 8)
+                            } else {
+                                Chart {
+                                    ForEach(counts, id: \.issue) { item in
+                                        BarMark(x: .value("Count", item.count), y: .value("Issue", item.issue))
+                                    }
+                                }
+                                .frame(height: CGFloat(counts.count * 34 + 20))
+                                .padding(.top, 8)
+                            }
                         }
-                        .padding(.top, 4)
+
+                        GroupBox("Averages") {
+                            VStack(alignment: .leading, spacing: 6) {
+                                LabeledContent("Avg Auto Score", value: String(format: "%.1f", average(\.autoScore)))
+                                LabeledContent("Avg TeleOp Score", value: String(format: "%.1f", average(\.teleopScore)))
+                                LabeledContent("Avg Cycle Time", value: String(format: "%.2fs", averageCycleTime))
+                                LabeledContent("Total Runs Logged", value: "\(records.count)")
+                            }
+                            .padding(.top, 4)
+                        }
+
+                        Button {
+                            exportURL = TestRunCSVExporter.writeTempFile(records: records)
+                        } label: {
+                            Label("Export All Runs as CSV", systemImage: "tablecells")
+                                .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(.borderedProminent)
                     }
+                    .padding()
                 }
-                .padding()
             }
+        }
+        .sheet(item: Binding(get: { exportURL.map(IdentifiableFileURL.init) }, set: { exportURL = $0?.url })) { wrapped in
+            CSVShareSheet(activityItems: [wrapped.url])
         }
     }
 
@@ -297,6 +311,53 @@ private struct TestingAnalyticsView: View {
             }
         }
         return counts.map { (issue: $0.key, count: $0.value) }.sorted { $0.count > $1.count }
+    }
+}
+
+private struct IdentifiableFileURL: Identifiable {
+    let url: URL
+    var id: URL { url }
+}
+
+private struct CSVShareSheet: UIViewControllerRepresentable {
+    let activityItems: [Any]
+    func makeUIViewController(context: Context) -> UIActivityViewController {
+        UIActivityViewController(activityItems: activityItems, applicationActivities: nil)
+    }
+    func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
+}
+
+// MARK: - CSV export
+
+enum TestRunCSVExporter {
+    static func csv(from records: [TestRunRecord]) -> String {
+        var lines = ["Date,Driver,AutoScore,TeleopScore,EndgameScore,TotalScore,CycleTimeSeconds,AutoConsistencyPercent,Battery,MechanicalIssues,Notes,RecordedBy"]
+        let formatter = ISO8601DateFormatter()
+        for record in records.sorted(by: { $0.date < $1.date }) {
+            let safeNotes = "\"\(record.notes.replacingOccurrences(of: "\"", with: "\"\""))\""
+            let issues = "\"\(record.mechanicalIssues.joined(separator: "; "))\""
+            let row = [
+                formatter.string(from: record.date),
+                record.driverName,
+                "\(record.autoScore)", "\(record.teleopScore)", "\(record.endgameScore)", "\(record.totalScore)",
+                String(format: "%.2f", record.cycleTimeSeconds),
+                String(format: "%.0f", record.autoConsistencyPercent),
+                record.batteryLabel ?? "",
+                issues, safeNotes, record.recordedByName
+            ].joined(separator: ",")
+            lines.append(row)
+        }
+        return lines.joined(separator: "\n")
+    }
+
+    static func writeTempFile(records: [TestRunRecord]) -> URL? {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("test_runs_export.csv")
+        do {
+            try csv(from: records).write(to: url, atomically: true, encoding: .utf8)
+            return url
+        } catch {
+            return nil
+        }
     }
 }
 
