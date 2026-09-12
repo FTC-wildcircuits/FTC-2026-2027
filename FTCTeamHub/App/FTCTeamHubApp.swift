@@ -2,9 +2,9 @@
 //  FTCTeamHubApp.swift
 //  FTCTeamHub
 //
-//  NEW: ContentView now reads `syncService` from the environment and
-//  passes it into AuthenticationManager, so sign-ups push the new
-//  profile to Firestore (see AuthenticationManager.swift).
+//  NEW: schema now includes Battery, ChecklistRun, InventoryItem. Two new
+//  tabs added: Pit Ops and Team Chat. ChatService follows the same
+//  environment-injection pattern as everything else.
 //
 
 import SwiftUI
@@ -17,7 +17,8 @@ struct FTCTeamHubApp: App {
     let container: ModelContainer = {
         let schema = Schema([
             AppUser.self, TaskItem.self, NotebookEntry.self,
-            TestRunRecord.self, Idea.self, ActivityEvent.self, TrackedTeam.self
+            TestRunRecord.self, Idea.self, ActivityEvent.self, TrackedTeam.self,
+            Battery.self, ChecklistRun.self, InventoryItem.self
         ])
         let config = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
         return try! ModelContainer(for: schema, configurations: [config])
@@ -25,6 +26,7 @@ struct FTCTeamHubApp: App {
 
     private let scoutAPI: FTCScoutAPIServicing = LiveFTCScoutAPIClient()
     private let syncService = FirebaseSyncService()
+    private let chatService = ChatService()
 
     init() {
         FirebaseApp.configure()
@@ -35,8 +37,10 @@ struct FTCTeamHubApp: App {
             ContentView()
                 .environment(\.ftcScoutAPI, scoutAPI)
                 .environment(\.syncService, syncService)
+                .environment(\.chatService, chatService)
                 .onAppear {
                     syncService.start(modelContext: container.mainContext)
+                    chatService.start()
                 }
         }
         .modelContainer(container)
@@ -53,6 +57,10 @@ private struct SyncServiceKey: EnvironmentKey {
     static let defaultValue: FirebaseSyncService? = nil
 }
 
+private struct ChatServiceKey: EnvironmentKey {
+    static let defaultValue: ChatService? = nil
+}
+
 extension EnvironmentValues {
     var ftcScoutAPI: FTCScoutAPIServicing {
         get { self[FTCScoutAPIKey.self] }
@@ -61,6 +69,10 @@ extension EnvironmentValues {
     var syncService: FirebaseSyncService? {
         get { self[SyncServiceKey.self] }
         set { self[SyncServiceKey.self] = newValue }
+    }
+    var chatService: ChatService? {
+        get { self[ChatServiceKey.self] }
+        set { self[ChatServiceKey.self] = newValue }
     }
 }
 
@@ -96,7 +108,7 @@ struct ContentView: View {
     }
 }
 
-// MARK: - Main TabView — six modules
+// MARK: - Main TabView — eight modules
 
 struct MainTabView: View {
     var body: some View {
@@ -115,6 +127,12 @@ struct MainTabView: View {
 
             IdeasTabView()
                 .tabItem { Label("Ideas", systemImage: "lightbulb.fill") }
+
+            PitOpsTabView()
+                .tabItem { Label("Pit Ops", systemImage: "wrench.and.screwdriver.fill") }
+
+            ChatTabView()
+                .tabItem { Label("Chat", systemImage: "bubble.left.and.bubble.right.fill") }
 
             LiveDataTabView()
                 .tabItem { Label("Live Data", systemImage: "antenna.radiowaves.left.and.right") }
