@@ -2,8 +2,8 @@
 //  PitOpsTabView.swift
 //  FTCTeamHub
 //
-//  TAB 7 — Pit Ops. Battery cycle tracking, pre/post-flight checklists,
-//  and parts/tools inventory with QR labels.
+//  NEW: Inventory section now has a dedicated "Scan" button that opens
+//  the camera-based QR check-in/check-out flow (QRCheckInOutView).
 //
 
 import SwiftUI
@@ -54,8 +54,10 @@ private struct BatteryListView: View {
     var body: some View {
         List {
             if batteries.isEmpty {
-                ContentUnavailableView("No batteries tracked", systemImage: "battery.100",
-                                       description: Text("Add your team's batteries to start tracking cycles and performance."))
+                EmptyStateView(icon: "battery.100", title: "No batteries tracked",
+                               subtitle: "Add your team's batteries to start tracking cycles and performance.",
+                               tint: .green, actionTitle: "Add Battery") { isPresentingNewBattery = true }
+                    .listRowSeparator(.hidden)
             }
             ForEach(batteries) { battery in
                 NavigationLink {
@@ -65,9 +67,7 @@ private struct BatteryListView: View {
                 }
             }
             Section {
-                Button {
-                    isPresentingNewBattery = true
-                } label: {
+                Button { isPresentingNewBattery = true } label: {
                     Label("Add Battery", systemImage: "plus")
                 }
             }
@@ -212,15 +212,12 @@ private struct ChecklistsView: View {
     var body: some View {
         List {
             Section {
-                Button {
-                    activeChecklistType = .preFlight
-                } label: {
-                    Label("Start Pre-Flight Checklist", systemImage: "checkmark.shield")
-                }
-                Button {
-                    activeChecklistType = .postFlight
-                } label: {
-                    Label("Start Post-Flight Checklist", systemImage: "checkmark.shield.fill")
+                ForEach(ChecklistType.allCases, id: \.self) { type in
+                    Button {
+                        activeChecklistType = type
+                    } label: {
+                        Label("Start \(type.rawValue) Checklist", systemImage: type.systemImage)
+                    }
                 }
             }
 
@@ -325,12 +322,15 @@ private struct ChecklistRunSheet: View {
 private struct InventoryListView: View {
     @Query(sort: \InventoryItem.name) private var items: [InventoryItem]
     @State private var isPresentingNewItem = false
+    @State private var isPresentingScanner = false
 
     var body: some View {
         List {
             if items.isEmpty {
-                ContentUnavailableView("No items tracked", systemImage: "shippingbox",
-                                       description: Text("Log expensive or easy-to-lose parts here."))
+                EmptyStateView(icon: "shippingbox", title: "No items tracked",
+                               subtitle: "Log expensive or easy-to-lose parts here.",
+                               tint: .orange, actionTitle: "Add Item") { isPresentingNewItem = true }
+                    .listRowSeparator(.hidden)
             }
             ForEach(items) { item in
                 NavigationLink {
@@ -346,7 +346,15 @@ private struct InventoryListView: View {
             }
         }
         .listStyle(.insetGrouped)
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                Button { isPresentingScanner = true } label: {
+                    Label("Scan", systemImage: "qrcode.viewfinder")
+                }
+            }
+        }
         .sheet(isPresented: $isPresentingNewItem) { NewInventoryItemSheet() }
+        .fullScreenCover(isPresented: $isPresentingScanner) { QRCheckInOutView() }
     }
 }
 
