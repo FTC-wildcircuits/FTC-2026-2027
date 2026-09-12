@@ -2,8 +2,9 @@
 //  TestingTabView.swift
 //  FTCTeamHub
 //
-//  NEW: logging a test run now calls syncService?.pushTestRun(...) so
-//  practice data syncs across devices.
+//  NEW: test run logging now includes an optional battery picker, so
+//  the Pit Ops battery detail view can correlate a battery with the
+//  match/practice scores it was used for.
 //
 
 import SwiftUI
@@ -14,6 +15,7 @@ import UIKit
 struct TestingTabView: View {
     @Query(sort: \AppUser.name) private var users: [AppUser]
     @Query(sort: \TestRunRecord.date, order: .reverse) private var records: [TestRunRecord]
+    @Query(sort: \Battery.label) private var batteries: [Battery]
     @State private var section: Section = .log
 
     enum Section: String, CaseIterable, Identifiable {
@@ -33,7 +35,7 @@ struct TestingTabView: View {
                 Divider()
 
                 switch section {
-                case .log: TestLogForm(users: users)
+                case .log: TestLogForm(users: users, batteries: batteries)
                 case .analytics: TestingAnalyticsView(records: records)
                 }
             }
@@ -46,11 +48,13 @@ struct TestingTabView: View {
 
 private struct TestLogForm: View {
     let users: [AppUser]
+    let batteries: [Battery]
     @Environment(AuthenticationManager.self) private var authManager
     @Environment(\.modelContext) private var context
     @Environment(\.syncService) private var syncService
 
     @State private var selectedDriverID: UUID?
+    @State private var selectedBatteryLabel: String?
     @State private var autoScore = 0
     @State private var teleopScore = 0
     @State private var endgameScore = 0
@@ -64,11 +68,17 @@ private struct TestLogForm: View {
 
     var body: some View {
         Form {
-            Section("Driver") {
+            Section("Driver & Battery") {
                 Picker("Driver", selection: $selectedDriverID) {
                     Text("Select driver").tag(UUID?.none)
                     ForEach(users) { user in
                         Text(user.name).tag(Optional(user.id))
+                    }
+                }
+                Picker("Battery", selection: $selectedBatteryLabel) {
+                    Text("Not tracked").tag(String?.none)
+                    ForEach(batteries) { battery in
+                        Text(battery.label).tag(Optional(battery.label))
                     }
                 }
             }
@@ -126,14 +136,15 @@ private struct TestLogForm: View {
             autoScore: autoScore, teleopScore: teleopScore, endgameScore: endgameScore,
             cycleTimeSeconds: cycleTime, autoConsistencyPercent: autoConsistency,
             mechanicalIssues: Array(selectedIssues), notes: notes,
-            recordedByID: currentUser.id, recordedByName: currentUser.name
+            recordedByID: currentUser.id, recordedByName: currentUser.name,
+            batteryLabel: selectedBatteryLabel
         )
         context.insert(record)
         syncService?.pushTestRun(record)
 
         let event = ActivityEvent(
             authorID: currentUser.id, authorName: currentUser.name, kind: .testLogged,
-            message: "logged a test run for \(driver.name)"
+            message: "logged a test run for \(driver.name)" + (selectedBatteryLabel.map { " (battery \($0))" } ?? "")
         )
         context.insert(event)
         syncService?.pushActivity(event)
