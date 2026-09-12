@@ -2,18 +2,12 @@
 //  Models.swift
 //  FTCTeamHub
 //
-//  Production SwiftData models for the internal FTC Team Management platform.
-//  This is a from-scratch redesign: no external scouting of other teams —
-//  everything here tracks YOUR team's roster, YOUR robot's practice runs,
-//  tasks, notebook entries, and ideas.
+//  Core SwiftData models. See PitOpsModels.swift for Battery, ChecklistRun,
+//  and InventoryItem (added separately to keep this file from ballooning).
 //
-//  Design notes:
-//  - `AppUser` stores a salted-free SHA256 password hash (good enough for an
-//    internal small-team tool; see AuthenticationManager.swift). Real
-//    credentials never touch anything but the hash.
-//  - Enums are raw-value `String` so they persist cleanly in SwiftData.
-//  - Every mutable entity is stamped with an author/driver id + timestamp
-//    for accountability, per the original mandate.
+//  CHANGE: TestRunRecord gained `batteryLabel: String?` so practice runs
+//  can be tagged with which battery was in the robot, letting the Pit Ops
+//  tab flag a specific battery as underperforming over time.
 //
 
 import Foundation
@@ -94,9 +88,6 @@ final class AppUser {
         self.joinedAt = joinedAt
     }
 
-    // Computed, non-persisted convenience accessors (SwiftData only
-    // schematizes plain stored properties, so these are ignored by the
-    // persistence layer and just read/write the raw string fields above).
     var role: TeamRole {
         get { TeamRole(rawValue: roleRaw) ?? .builder }
         set { roleRaw = newValue.rawValue }
@@ -267,6 +258,8 @@ final class TestRunRecord {
     var notes: String
     var recordedByID: UUID
     var recordedByName: String
+    /// Label of the battery installed for this run (e.g. "B1"), if tracked.
+    var batteryLabel: String?
 
     init(id: UUID = UUID(),
          driverID: UUID,
@@ -280,7 +273,8 @@ final class TestRunRecord {
          mechanicalIssues: [String] = [],
          notes: String = "",
          recordedByID: UUID,
-         recordedByName: String) {
+         recordedByName: String,
+         batteryLabel: String? = nil) {
         self.id = id
         self.driverID = driverID
         self.driverName = driverName
@@ -294,6 +288,7 @@ final class TestRunRecord {
         self.notes = notes
         self.recordedByID = recordedByID
         self.recordedByName = recordedByName
+        self.batteryLabel = batteryLabel
     }
 
     var totalScore: Int { autoScore + teleopScore + endgameScore }
@@ -344,10 +339,11 @@ final class Idea {
     var upvoteCount: Int { upvoterIDs.count }
 }
 
-// MARK: - Internal Activity Feed (surfaced inside the Roster tab)
+// MARK: - Internal Activity Feed
 
 enum ActivityKind: String, Codable {
     case taskCompleted, taskCreated, testLogged, ideaPosted, ideaUpvoted, notebookEntry
+    case checklistCompleted, batteryStatusChanged, inventoryUpdated
 }
 
 @Model
@@ -381,6 +377,9 @@ final class ActivityEvent {
         case .ideaPosted: return "lightbulb.fill"
         case .ideaUpvoted: return "hand.thumbsup.fill"
         case .notebookEntry: return "book.closed.fill"
+        case .checklistCompleted: return "checklist"
+        case .batteryStatusChanged: return "battery.75"
+        case .inventoryUpdated: return "shippingbox.fill"
         }
     }
 }
