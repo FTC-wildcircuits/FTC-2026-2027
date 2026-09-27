@@ -76,16 +76,17 @@ data, scoring simulator, real-time chat, team settings, and budget/sponsor
 tracking. The clean-slate build clears local team records once on first
 launch, starts with cloud sync off, and includes an in-app 2026–27 calendar
 for the five supplied events with a linked engineering notebook and
-persistent robot/pit readiness checklist for each. The login screen has a
-bold, native-feeling Wild Circuits / Team 24211 identity, labeled sign-in
-fields, keyboard-aware navigation, a direct account-creation flow, and
-accessible password visibility controls. Authentication and local save
-failures are shown to the user instead of being silently ignored. Native
-adaptive text colors keep member and event names legible in both iOS
-appearance modes, with a restrained red team accent. The app uses a custom
-five-section navigation dock, a team status dashboard, and a quick practice
-log form that records an observation, follow-up test, work area, and author
-directly in the searchable engineering notebook.
+persistent robot/pit readiness checklist for each. The login screen uses a
+simple Wild Circuits / Team 24211 wordmark, labeled credential fields, and a
+separate account-creation path. Member colors are shown as named, accessible
+choices with a clear explanation of where they appear. Authentication and
+local save failures are shown to the user instead of being silently ignored.
+Native adaptive text colors keep member and event names legible in both iOS
+appearance modes. The dashboard uses compact team-status summaries and
+reports readiness only for checks the team has actually tracked. The app has
+a five-section navigation dock and a quick practice log form that records an
+observation, follow-up test, work area, and author directly in the searchable
+engineering notebook.
 Enabling cloud sync is optional and may download existing shared records;
 it also uploads local records from this device. The reset does not delete
 Firestore data. FTCScout match scores are not fabricated: scores in scouting

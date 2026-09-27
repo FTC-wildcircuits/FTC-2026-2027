@@ -49,7 +49,7 @@ private struct ProfileSettingsView: View {
     @Environment(\.modelContext) private var context
     @Environment(\.syncService) private var syncService
     @Environment(AuthenticationManager.self) private var authManager
-    @AppStorage("accentColorRaw") private var accentColorRaw: String = AvatarColor.blue.rawValue
+    @AppStorage("accentColorRaw") private var accentColorRaw: String = AvatarColor.red.rawValue
     @AppStorage("cloudSyncEnabled") private var cloudSyncEnabled = false
     @State private var isPresentingReset = false
     @State private var cloudSyncError: String?
@@ -109,36 +109,11 @@ private struct ProfileSettingsView: View {
                 }
             }
 
-            Section("App Accent Color") {
-                HStack(spacing: 12) {
-                    ForEach(AvatarColor.allCases) { swatch in
-                        Circle()
-                            .fill(swatch.color)
-                            .frame(width: 30, height: 30)
-                            .overlay {
-                                if accentColorRaw == swatch.rawValue {
-                                    Image(systemName: "checkmark").font(.caption.bold()).foregroundStyle(.white)
-                                }
-                            }
-                            .sheet(isPresented: $isPresentingReset) {
-                                ResetConfirmationSheet()
-                            }
-                            .alert("Could not enable cloud sync", isPresented: Binding(
-                                get: { cloudSyncError != nil },
-                                set: { if !$0 { cloudSyncError = nil } }
-                            )) {
-                                Button("OK", role: .cancel) { cloudSyncError = nil }
-                            } message: {
-                                Text(cloudSyncError ?? "Please try again.")
-                            }
-                            .onTapGesture {
-                                UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                                accentColorRaw = swatch.rawValue
-                            }
-                    }
-                }
-                Text("Applies across the whole app, on this device only.")
-                    .font(.caption2).foregroundStyle(.secondary)
+            Section("Accent color") {
+                FTCColorPicker(selection: accentSelection)
+                Text("Changes button and highlight color on this iPhone only.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
 
             Section {
@@ -147,6 +122,24 @@ private struct ProfileSettingsView: View {
                 }
             }
         }
+        .sheet(isPresented: $isPresentingReset) {
+            ResetConfirmationSheet()
+        }
+        .alert("Could not enable cloud sync", isPresented: Binding(
+            get: { cloudSyncError != nil },
+            set: { if !$0 { cloudSyncError = nil } }
+        )) {
+            Button("OK", role: .cancel) { cloudSyncError = nil }
+        } message: {
+            Text(cloudSyncError ?? "Please try again.")
+        }
+    }
+
+    private var accentSelection: Binding<AvatarColor> {
+        Binding(
+            get: { AvatarColor(rawValue: accentColorRaw) ?? .red },
+            set: { accentColorRaw = $0.rawValue }
+        )
     }
 }
 

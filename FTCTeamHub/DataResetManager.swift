@@ -36,7 +36,7 @@ enum DataResetManager {
         }
 
         try context.save()
-        UserDefaults.standard.set(AvatarColor.blue.rawValue, forKey: "accentColorRaw")
+        UserDefaults.standard.set(AvatarColor.red.rawValue, forKey: "accentColorRaw")
         UserDefaults.standard.set(false, forKey: "cloudSyncEnabled")
         NotificationScheduler.cancelAllReminders()
         if includeRoster {

@@ -28,7 +28,7 @@ struct LoginView: View {
     @State private var email = ""
     @State private var password = ""
     @State private var role: TeamRole = .builder
-    @State private var avatarColor: AvatarColor = .blue
+    @State private var avatarColor: AvatarColor = .red
     @State private var passwordVisible = false
     @FocusState private var focusedField: Field?
 
@@ -58,15 +58,15 @@ struct LoginView: View {
                             .padding(.top, 18)
                     }
                     primaryAction
-                        .padding(.top, 24)
+                        .padding(.top, 28)
                     modeAction
-                        .padding(.top, 20)
+                        .padding(.top, 18)
                     privacyNote
-                        .padding(.top, 34)
+                        .padding(.top, 30)
                 }
                 .frame(maxWidth: 440, alignment: .leading)
                 .frame(maxWidth: .infinity)
-                .padding(.horizontal, 26)
+                .padding(.horizontal, 24)
                 .padding(.top, 14)
                 .padding(.bottom, 34)
             }
@@ -79,51 +79,47 @@ struct LoginView: View {
     }
 
     private var identityHeader: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            HStack(spacing: 12) {
-                FTCBrandMark(size: 46)
-                    .accessibilityHidden(true)
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .center, spacing: 10) {
+                RoundedRectangle(cornerRadius: 1)
+                    .fill(FTCBrand.orange)
+                    .frame(width: 3, height: 27)
                 VStack(alignment: .leading, spacing: 3) {
                     Text("WILD CIRCUITS")
-                        .font(.system(.subheadline, design: .rounded, weight: .bold))
-                        .tracking(0.7)
-                        .foregroundStyle(.primary)
-                    Text("FIRST TECH CHALLENGE  ·  24211")
+                        .font(.system(size: 12, weight: .bold, design: .rounded))
+                        .tracking(1.1)
+                    Text("FIRST TECH CHALLENGE  /  TEAM 24211")
                         .font(.system(size: 9, weight: .medium, design: .monospaced))
+                        .tracking(0.15)
                         .foregroundStyle(.secondary)
                 }
-                Spacer()
+                Spacer(minLength: 6)
                 Text("2026–27")
-                    .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                    .font(.system(size: 10, weight: .medium, design: .monospaced))
                     .foregroundStyle(.secondary)
             }
-            .padding(.vertical, 12)
-
-            Rectangle()
-                .fill(FTCBrand.line)
-                .frame(height: 1)
         }
     }
 
     private var welcomeHeading: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text(isSigningUp ? "Join the team." : "Welcome back.")
-                .font(.system(size: 36, weight: .bold, design: .rounded))
-                .tracking(-1.2)
+            Text(isSigningUp ? "Create account" : "Sign in")
+                .font(.system(size: 34, weight: .bold))
+                .tracking(-1.1)
                 .foregroundStyle(.primary)
                 .fixedSize(horizontal: false, vertical: true)
             Text(isSigningUp
-                 ? "Create your member profile to get started."
-                 : "Sign in to your team workspace.")
+                 ? "Set up your team member profile."
+                 : "Use your team account to continue.")
                 .font(.body)
                 .foregroundStyle(.secondary)
         }
-        .padding(.top, 36)
-        .padding(.bottom, 30)
+        .padding(.top, 52)
+        .padding(.bottom, 34)
     }
 
     private var credentialFields: some View {
-        VStack(alignment: .leading, spacing: 19) {
+        VStack(alignment: .leading, spacing: 20) {
             if isSigningUp {
                 labeledField("Full name", symbol: "person", field: .name) {
                     TextField("Your name", text: $name)
@@ -188,7 +184,7 @@ struct LoginView: View {
     ) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(title)
-                .font(.system(.subheadline, design: .rounded, weight: .semibold))
+                .font(.subheadline.weight(.semibold))
                 .foregroundStyle(.primary)
 
             HStack(spacing: 11) {
@@ -217,7 +213,7 @@ struct LoginView: View {
         VStack(alignment: .leading, spacing: 17) {
             VStack(alignment: .leading, spacing: 8) {
                 Text("Team role")
-                    .font(.system(.subheadline, design: .rounded, weight: .semibold))
+                    .font(.subheadline.weight(.semibold))
                     .foregroundStyle(.primary)
                 Menu {
                     ForEach(TeamRole.allCases) { option in
@@ -248,37 +244,14 @@ struct LoginView: View {
                 .accessibilityLabel("Team role, \(role.rawValue)")
             }
 
-            HStack {
-                Text("Profile color")
-                    .font(.system(.subheadline, design: .rounded, weight: .semibold))
+            VStack(alignment: .leading, spacing: 7) {
+                Text("Member color")
+                    .font(.subheadline.weight(.semibold))
                     .foregroundStyle(.primary)
-                Spacer()
-                ForEach(AvatarColor.allCases) { swatch in
-                    Button {
-                        UISelectionFeedbackGenerator().selectionChanged()
-                        avatarColor = swatch
-                    } label: {
-                        Circle()
-                            .fill(swatch.color)
-                            .frame(width: 27, height: 27)
-                            .overlay {
-                                if avatarColor == swatch {
-                                    Image(systemName: "checkmark")
-                                        .font(.system(size: 10, weight: .bold))
-                                        .foregroundStyle(.white)
-                                }
-                            }
-                            .padding(3)
-                            .overlay {
-                                Circle()
-                                    .stroke(avatarColor == swatch ? Color.primary : .clear,
-                                            lineWidth: 1)
-                            }
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("\(swatch.rawValue) profile color")
-                    .accessibilityAddTraits(avatarColor == swatch ? .isSelected : [])
-                }
+                Text("Shown next to your name across team lists and activity.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                FTCColorPicker(selection: $avatarColor)
             }
         }
     }
@@ -308,7 +281,7 @@ struct LoginView: View {
         Button(action: submit) {
             HStack {
                 Text(isSigningUp ? "Create account" : "Sign in")
-                    .font(.system(.body, design: .rounded, weight: .semibold))
+                    .font(.body.weight(.semibold))
                 Spacer()
                 Image(systemName: "arrow.right")
                     .font(.subheadline.weight(.semibold))
@@ -346,10 +319,14 @@ struct LoginView: View {
             Rectangle()
                 .fill(FTCBrand.line)
                 .frame(height: 1)
-            Label("Your account is stored on this iPhone.", systemImage: "iphone")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            Text("Team data stays on this device unless cloud sync is enabled.")
+            HStack(spacing: 6) {
+                Image(systemName: "iphone")
+                    .font(.caption)
+                Text("Local team account")
+                    .font(.caption.weight(.medium))
+            }
+            .foregroundStyle(.secondary)
+            Text("Team records stay on this device unless cloud sync is enabled.")
                 .font(.caption2)
                 .foregroundStyle(.tertiary)
                 .multilineTextAlignment(.center)

@@ -51,15 +51,69 @@ struct FTCBrandCard<Content: View>: View {
 
     var body: some View {
         content
-            .padding(18)
+            .padding(16)
             .background {
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
                     .fill(Color(uiColor: .secondarySystemGroupedBackground))
                     .overlay {
-                        RoundedRectangle(cornerRadius: 18, style: .continuous)
-                            .stroke(Color.primary.opacity(0.05), lineWidth: 1)
+                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                            .stroke(FTCBrand.line.opacity(0.65), lineWidth: 0.75)
                     }
             }
+    }
+}
+
+struct FTCColorPicker: View {
+    @Binding var selection: AvatarColor
+
+    private let columns = Array(repeating: GridItem(.flexible(), spacing: 8), count: 2)
+
+    var body: some View {
+        LazyVGrid(columns: columns, spacing: 8) {
+            ForEach(AvatarColor.allCases) { color in
+                let isSelected = selection == color
+                Button {
+                    UISelectionFeedbackGenerator().selectionChanged()
+                    selection = color
+                } label: {
+                    HStack(spacing: 9) {
+                        Circle()
+                            .fill(color.color)
+                            .frame(width: 19, height: 19)
+                            .overlay {
+                                if isSelected {
+                                    Image(systemName: "checkmark")
+                                        .font(.system(size: 9, weight: .bold))
+                                        .foregroundStyle(.white)
+                                }
+                            }
+                        Text(color.rawValue.capitalized)
+                            .font(.system(.subheadline, design: .rounded,
+                                          weight: isSelected ? .semibold : .regular))
+                            .foregroundStyle(.primary)
+                            .lineLimit(1)
+                        Spacer(minLength: 0)
+                    }
+                    .padding(.horizontal, 10)
+                    .frame(maxWidth: .infinity, minHeight: 42)
+                    .background(
+                        isSelected
+                            ? FTCBrand.accentText.opacity(0.09)
+                            : Color(uiColor: .secondarySystemGroupedBackground),
+                        in: RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    )
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .stroke(isSelected ? FTCBrand.accentText : FTCBrand.line.opacity(0.7),
+                                    lineWidth: isSelected ? 1.25 : 0.75)
+                    }
+                    .contentShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("\(color.rawValue.capitalized)\(isSelected ? ", selected" : "")")
+                .accessibilityAddTraits(isSelected ? .isSelected : [])
+            }
+        }
     }
 }
 

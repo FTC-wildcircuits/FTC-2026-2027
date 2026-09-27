@@ -18,6 +18,7 @@ struct DashboardTabView: View {
     @Query private var batteries: [Battery]
     @Query private var inventoryItems: [InventoryItem]
     @Query private var testRuns: [TestRunRecord]
+    @Query private var scoutingReports: [ScoutingReport]
     @Query(sort: \ActivityEvent.timestamp, order: .reverse) private var activity: [ActivityEvent]
     @Query(sort: \ChecklistRun.timestamp, order: .reverse) private var checklistRuns: [ChecklistRun]
 
@@ -81,44 +82,47 @@ struct DashboardTabView: View {
 
     private var readinessFactors: [ReadinessFactor] {
         [
-            ReadinessFactor(label: "Open tasks on schedule", isGood: overdueTasks.isEmpty, isTracked: !myOpenTasks.isEmpty),
+            ReadinessFactor(label: "Open tasks on schedule", isGood: overdueTasks.isEmpty, isTracked: !allTasks.isEmpty),
             ReadinessFactor(label: "Batteries healthy", isGood: batteriesNeedingAttention.isEmpty, isTracked: !batteries.isEmpty),
             ReadinessFactor(label: "Inventory in good shape", isGood: inventoryNeedingAttention.isEmpty, isTracked: !inventoryItems.isEmpty),
-            ReadinessFactor(label: "Pre-flight checklist done today", isGood: todaysChecklist != nil, isTracked: true)
+            ReadinessFactor(label: "Pre-flight checklist done today", isGood: todaysChecklist != nil, isTracked: todaysChecklist != nil)
         ]
     }
 
-    private var readinessScore: Double {
+    private var readinessScore: Double? {
         let tracked = readinessFactors.filter { $0.isTracked }
-        guard !tracked.isEmpty else { return 1 }
+        guard !tracked.isEmpty else { return nil }
         return Double(tracked.filter { $0.isGood }.count) / Double(tracked.count)
     }
 
     private var readinessHeadline: String {
+        guard let readinessScore else {
+            return "Add your first team task or checklist to track readiness."
+        }
         switch readinessScore {
-        case 1: return "Everything's dialed in."
-        case 0.75...: return "In great shape — a couple of things to tidy up."
-        case 0.5..<0.75: return "On track, but a few things need attention."
-        default: return "Several things need the team's attention."
+        case 1: return "All tracked checks are clear."
+        case 0.75...: return "Most checks are clear."
+        case 0.5..<0.75: return "Some checks need a review."
+        default: return "Several tracked checks need attention."
         }
     }
 
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(alignment: .leading, spacing: 22) {
+                VStack(alignment: .leading, spacing: 20) {
                     header
                     readinessCard
                     nextEventCard
-                    sectionHeading("TEAM SNAPSHOT", detail: "Your operation at a glance")
+                    sectionHeading("Team snapshot", detail: "At a glance")
                     statGrid
-                    sectionHeading("PIT STATUS", detail: "Items that may need a hand")
+                    sectionHeading("Needs attention", detail: "Equipment and preparation")
                     if !batteriesNeedingAttention.isEmpty { batteryAlertCard }
                     if !inventoryNeedingAttention.isEmpty { inventoryAlertCard }
                     if todaysChecklist == nil { checklistNudgeCard }
-                    sectionHeading("PERFORMANCE", detail: "Signals from your own practice data")
+                    sectionHeading("Practice insights", detail: "Based on your recorded data")
                     insightsSection
-                    sectionHeading("LATEST UPDATES", detail: "Recent work from your crew")
+                    sectionHeading("Recent activity", detail: "Latest team updates")
                     recentActivitySection
                 }
                 .padding(.horizontal, 18)
@@ -187,7 +191,7 @@ struct DashboardTabView: View {
                 }
             }
             Text(greeting)
-                .font(.system(size: 30, weight: .bold, design: .rounded))
+                .font(.system(size: 30, weight: .bold))
                 .tracking(-0.8)
                 .foregroundStyle(.primary)
             Text("Team 24211  ·  \(Date.now.formatted(.dateTime.weekday(.wide).month(.wide).day()))")
@@ -201,12 +205,11 @@ struct DashboardTabView: View {
             HStack(alignment: .center, spacing: 18) {
                 ReadinessRing(score: readinessScore)
                 VStack(alignment: .leading, spacing: 6) {
-                    Text("TEAM READINESS")
-                        .font(.system(size: 10, weight: .bold, design: .monospaced))
-                        .tracking(1.1)
+                    Text(readinessScore == nil ? "Readiness not tracked" : "Team readiness")
+                        .font(.caption.weight(.semibold))
                         .foregroundStyle(.secondary)
                     Text(readinessHeadline)
-                        .font(.system(.subheadline, design: .rounded, weight: .semibold))
+                        .font(.system(.subheadline, design: .rounded, weight: .medium))
                         .fixedSize(horizontal: false, vertical: true)
                     VStack(alignment: .leading, spacing: 3) {
                         ForEach(readinessFactors.filter { !$0.isGood && $0.isTracked }.prefix(2), id: \.label) { factor in
@@ -227,11 +230,10 @@ struct DashboardTabView: View {
         HStack(alignment: .bottom) {
             VStack(alignment: .leading, spacing: 4) {
                 Text(title)
-                    .font(.system(size: 10, weight: .bold, design: .monospaced))
-                    .tracking(1.1)
-                    .foregroundStyle(FTCBrand.accentText)
+                    .font(.title3.weight(.semibold))
+                    .foregroundStyle(.primary)
                 Text(detail)
-                    .font(.system(.subheadline, design: .rounded, weight: .medium))
+                    .font(.caption)
                     .foregroundStyle(.secondary)
             }
             Spacer()
@@ -257,10 +259,10 @@ struct DashboardTabView: View {
         GroupBox {
             HStack {
                 Image(systemName: "calendar.badge.clock")
-                    .font(.title3.weight(.semibold))
-                    .foregroundStyle(.white)
-                    .frame(width: 42, height: 42)
-                    .background(FTCBrand.midnight, in: RoundedRectangle(cornerRadius: 12))
+                    .font(.title3.weight(.medium))
+                    .foregroundStyle(FTCBrand.accentText)
+                    .frame(width: 40, height: 40)
+                    .background(FTCBrand.accentText.opacity(0.09), in: RoundedRectangle(cornerRadius: 11))
 
                 VStack(alignment: .leading, spacing: 2) {
                     if isLoadingEvent {
@@ -337,25 +339,25 @@ struct DashboardTabView: View {
     private var statGrid: some View {
         LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
             DashboardStatCard(
-                title: "My Open Tasks", value: "\(myOpenTasks.count)",
+                title: "My open tasks", value: "\(myOpenTasks.count)",
                 subtitle: overdueTasks.isEmpty ? nil : "\(overdueTasks.count) overdue",
-                subtitleColor: .red, icon: "checklist", tint: .blue
+                subtitleColor: .red, icon: "checklist"
             ) { router.selection = .tasks }
 
             DashboardStatCard(
-                title: "Batteries Tracked", value: "\(batteries.count)",
+                title: "Batteries", value: "\(batteries.count)",
                 subtitle: batteriesNeedingAttention.isEmpty ? nil : "\(batteriesNeedingAttention.count) need attention",
-                subtitleColor: .orange, icon: "battery.75", tint: .green
+                subtitleColor: .orange, icon: "battery.75"
             ) { router.selection = .pitOps }
 
             DashboardStatCard(
-                title: "Notebook & Ideas", value: "\(activity.filter { $0.kind == .notebookEntry || $0.kind == .ideaPosted }.count)",
-                subtitle: "this season", subtitleColor: .secondary, icon: "book.closed", tint: .purple
+                title: "Notebook & ideas", value: "\(activity.filter { $0.kind == .notebookEntry || $0.kind == .ideaPosted }.count)",
+                subtitle: "this season", subtitleColor: .secondary, icon: "book.closed"
             ) { router.selection = .notebook }
 
             DashboardStatCard(
-                title: "Scout & Events", value: "Open", subtitle: "FTCScout + reports", subtitleColor: .secondary,
-                icon: "antenna.radiowaves.left.and.right", tint: .indigo
+                title: "Match reports", value: "\(scoutingReports.count)", subtitle: "team observations", subtitleColor: .secondary,
+                icon: "scope"
             ) { router.selection = .liveData }
         }
     }
@@ -466,9 +468,10 @@ struct DashboardTabView: View {
 }
 
 private struct ReadinessRing: View {
-    let score: Double
+    let score: Double?
 
     private var tint: Color {
+        guard let score else { return .secondary }
         switch score {
         case 0.75...: return .green
         case 0.5..<0.75: return FTCBrand.orange
@@ -480,12 +483,14 @@ private struct ReadinessRing: View {
         ZStack {
             Circle()
                 .stroke(Color.primary.opacity(0.08), lineWidth: 9)
-            Circle()
-                .trim(from: 0, to: max(0.02, score))
-                .stroke(tint, style: StrokeStyle(lineWidth: 9, lineCap: .round))
-                .rotationEffect(.degrees(-90))
+            if let score {
+                Circle()
+                    .trim(from: 0, to: max(0.02, score))
+                    .stroke(tint, style: StrokeStyle(lineWidth: 9, lineCap: .round))
+                    .rotationEffect(.degrees(-90))
+            }
             VStack(spacing: 0) {
-                Text("\(Int((score * 100).rounded()))%")
+                Text(score.map { "\(Int(($0 * 100).rounded()))%" } ?? "—")
                     .font(.system(size: 19, weight: .bold, design: .rounded))
                     .foregroundStyle(.primary)
                     .monospacedDigit()
@@ -518,7 +523,6 @@ private struct DashboardStatCard: View {
     let subtitle: String?
     let subtitleColor: Color
     let icon: String
-    let tint: Color
     let action: () -> Void
 
     var body: some View {
@@ -527,13 +531,14 @@ private struct DashboardStatCard: View {
                 HStack {
                     Image(systemName: icon)
                         .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(tint)
-                        .frame(width: 31, height: 31)
-                        .background(tint.opacity(0.16), in: RoundedRectangle(cornerRadius: 9))
+                        .foregroundStyle(FTCBrand.accentText)
+                        .frame(width: 29, height: 29)
+                        .background(FTCBrand.accentText.opacity(0.09),
+                                    in: RoundedRectangle(cornerRadius: 8))
                     Spacer()
                 }
                 Text(value)
-                    .font(.system(size: 27, weight: .bold, design: .rounded).monospacedDigit())
+                    .font(.system(size: 27, weight: .semibold).monospacedDigit())
                     .foregroundStyle(.primary)
                 Text(title)
                     .font(.system(.caption, design: .rounded, weight: .medium))
@@ -546,20 +551,12 @@ private struct DashboardStatCard: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(14)
-            .frame(minHeight: 136, alignment: .topLeading)
+            .frame(minHeight: 124, alignment: .topLeading)
             .background(Color(uiColor: .secondarySystemGroupedBackground),
-                        in: RoundedRectangle(cornerRadius: 17, style: .continuous))
-            .overlay(alignment: .top) {
-                RoundedRectangle(cornerRadius: 3)
-                    .fill(tint)
-                    .frame(height: 3)
-                    .padding(.horizontal, 14)
-                    .padding(.top, 0)
-                    .offset(y: -1.5)
-            }
+                        in: RoundedRectangle(cornerRadius: 14, style: .continuous))
             .overlay {
-                RoundedRectangle(cornerRadius: 17, style: .continuous)
-                    .stroke(Color.primary.opacity(0.045), lineWidth: 1)
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .stroke(FTCBrand.line.opacity(0.65), lineWidth: 0.75)
             }
         }
         .buttonStyle(.plain)
@@ -570,10 +567,10 @@ private struct DashboardGroupBoxStyle: GroupBoxStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.content
             .background(Color(uiColor: .secondarySystemGroupedBackground),
-                        in: RoundedRectangle(cornerRadius: 17, style: .continuous))
+                        in: RoundedRectangle(cornerRadius: 14, style: .continuous))
             .overlay {
-                RoundedRectangle(cornerRadius: 17, style: .continuous)
-                    .stroke(Color.primary.opacity(0.045), lineWidth: 1)
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .stroke(FTCBrand.line.opacity(0.65), lineWidth: 0.75)
             }
     }
 }

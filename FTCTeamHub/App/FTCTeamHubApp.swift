@@ -54,7 +54,7 @@ struct FTCTeamHubApp: App {
     private let syncService = FirebaseSyncService()
     private let chatService = ChatService()
 
-    @AppStorage("accentColorRaw") private var accentColorRaw: String = AvatarColor.blue.rawValue
+    @AppStorage("accentColorRaw") private var accentColorRaw: String = AvatarColor.red.rawValue
 
     init() {
         FirebaseApp.configure()
@@ -66,7 +66,7 @@ struct FTCTeamHubApp: App {
                 .environment(\.ftcScoutAPI, scoutAPI)
                 .environment(\.syncService, syncService)
                 .environment(\.chatService, chatService)
-                .tint((AvatarColor(rawValue: accentColorRaw) ?? .blue).color)
+                .tint((AvatarColor(rawValue: accentColorRaw) ?? .red).color)
                 .onAppear {
                     NotificationScheduler.requestAuthorizationIfNeeded()
                 }
@@ -236,18 +236,9 @@ private struct TeamTabDock: View {
                         Text(tab.title)
                             .font(.system(size: 10, weight: selection == tab ? .semibold : .medium))
                     }
-                    .foregroundStyle(selection == tab ? Color.primary : Color.secondary)
+                    .foregroundStyle(selection == tab ? FTCBrand.accentText : Color.secondary)
                     .frame(maxWidth: .infinity)
-                    .frame(height: 54)
-                    .background {
-                        if selection == tab {
-                            RoundedRectangle(cornerRadius: 12)
-                                .fill(FTCBrand.orange.opacity(0.14))
-                                .overlay(alignment: .top) {
-                                    Capsule().fill(FTCBrand.orange).frame(width: 20, height: 2)
-                                }
-                        }
-                    }
+                    .frame(height: 52)
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
@@ -255,8 +246,8 @@ private struct TeamTabDock: View {
                 .accessibilityAddTraits(selection == tab ? .isSelected : [])
             }
         }
-        .padding(.horizontal, 10)
-        .padding(.top, 7)
+        .padding(.horizontal, 12)
+        .padding(.top, 5)
         .padding(.bottom, 2)
         .background {
             Color(uiColor: .systemBackground)
