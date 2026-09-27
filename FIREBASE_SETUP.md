@@ -43,14 +43,22 @@ Go to **Actions → Build Unsigned IPA → Run workflow**. The first build after
 
 ## Security note
 
+**This GitHub repository is public.** `GoogleService-Info.plist` is present
+in the public source and bundled in the app; treat its Firebase API key and
+project identifiers as public client configuration, not credentials. Backend
+authorization and Firestore rules must protect team records. Never add
+passwords, service-account JSON, private keys, or other server credentials to
+the repository or IPA.
+
 The app's current email/password account system is local to the app and is
 not Firebase Authentication. Firestore rules requiring `request.auth` will
 reject this app's requests until Firebase Authentication is integrated.
 Conversely, open test-mode rules allow unauthenticated reads and writes.
 Do not use them with real team data or distribute the app until access is
 protected by an authenticated backend and restrictive Firestore rules.
-Keep `GoogleService-Info.plist` out of public repositories; its API key is
-not a substitute for database access control.
+Restrict the public Firebase API key to the required services where
+practical, and replace it if you need a key that is not publicly exposed.
+API-key restrictions do not replace Firestore security rules.
 
 ## Current sync coverage
 

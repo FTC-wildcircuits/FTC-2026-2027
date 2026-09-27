@@ -379,9 +379,9 @@ private struct InventoryListView: View {
                 Section {
                     HStack(spacing: 14) {
                         Label("\(lowStockCount) low", systemImage: "exclamationmark.triangle.fill")
-                            .foregroundStyle(lowStockCount == 0 ? .secondary : .orange)
+                            .foregroundStyle(lowStockCount == 0 ? Color.gray : Color.orange)
                         Label("\(maintenanceCount) repair", systemImage: "wrench.and.screwdriver.fill")
-                            .foregroundStyle(maintenanceCount == 0 ? .secondary : .red)
+                            .foregroundStyle(maintenanceCount == 0 ? Color.gray : Color.red)
                     }
                     .font(.caption.weight(.medium))
                 }

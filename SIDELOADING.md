@@ -53,8 +53,11 @@ signing assets, and a separately configured signed-release workflow.
 ## Firebase and team data
 
 The build stops if `FTCTeamHub/GoogleService-Info.plist` is absent or does not
-match bundle ID `com.ftcteamhub.app`. Keep the plist out of public
-repositories. An API key is not Firestore access control.
+match bundle ID `com.ftcteamhub.app`. **This GitHub repository is public**, so
+the existing plist and Firebase API key are public client configuration. Do
+not put passwords, service-account JSON, or private keys in the repository or
+IPA. Restrict the API key to the needed services where practical; this is not
+a replacement for Firestore access control.
 
 The app's email/password login is local, not Firebase Authentication. Open
 Firestore test rules can expose data to anyone, while rules requiring Firebase

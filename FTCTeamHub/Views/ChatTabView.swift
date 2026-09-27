@@ -137,12 +137,12 @@ struct ChatTabView: View {
                 draft = ""
             }
         }
+    }
 
-        private func reconnect(_ service: ChatService) {
-            sendError = nil
-            service.stop()
-            service.start()
-        }
+    private func reconnect(_ service: ChatService) {
+        sendError = nil
+        service.stop()
+        service.start()
     }
 }
 
