@@ -1,75 +1,171 @@
-# .github/workflows/build-unsigned-ipa.yml
-#
-# Builds FTCTeamHub entirely on a GitHub-hosted macOS runner. Produces an
-# UNSIGNED .ipa as a downloadable artifact. AltServer signs it with your
-# personal Apple ID at sideload time.
-#
-# CHANGE: added `-quiet` to the xcodebuild invocation. Without it, Xcode
-# prints every single compiler flag for every one of Firebase's ~40
-# sub-targets (leveldb, gRPC, abseil, nanopb, etc.) — multiple MEGABYTES of
-# noise per run — which buries the one or two lines that actually matter
-# when something fails. `-quiet` suppresses that noise and only shows
-# warnings/errors, so if this fails again, the log will actually be
-# readable instead of a multi-million-character wall of -fmodule-map-file
-# flags.
-
-name: Build Unsigned IPA
+name: Build unsigned iOS IPA
 
 on:
   workflow_dispatch:
+  pull_request:
+    branches: [main]
   push:
-    branches: [ main ]
+    branches: [main]
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ios-ipa-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build:
-    runs-on: macos-14
+    name: Build and package iOS app
+    runs-on: macos-15
+    permissions:
+      contents: write
+    env:
+      PRODUCT_BUNDLE_IDENTIFIER: com.ftcteamhub.app
+      BUILD_NUMBER: ${{ github.run_number }}
 
     steps:
-      - name: Checkout repo
+      - name: Check out source
         uses: actions/checkout@v4
 
-      - name: List available Xcode versions (diagnostic)
-        run: ls /Applications | grep Xcode
-
-      - name: Select newest available Xcode
+      - name: Select Xcode
         run: |
-          LATEST_XCODE=$(ls -d /Applications/Xcode*.app | sort -V | tail -n 1)
-          echo "Selecting $LATEST_XCODE"
-          sudo xcode-select -s "$LATEST_XCODE"
+          set -euo pipefail
           xcodebuild -version
+          xcode-select -p
+
+      - name: Validate Firebase configuration
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import plistlib
+          from pathlib import Path
+
+          path = Path("FTCTeamHub/GoogleService-Info.plist")
+          if not path.is_file():
+              raise SystemExit(f"Missing required app configuration: {path}")
+          with path.open("rb") as file:
+              config = plistlib.load(file)
+          required = ("API_KEY", "GOOGLE_APP_ID", "PROJECT_ID", "BUNDLE_ID")
+          missing = [key for key in required if not isinstance(config.get(key), str) or not config[key].strip()]
+          if missing:
+              raise SystemExit("Firebase configuration is missing required keys: " + ", ".join(missing))
+          if config["BUNDLE_ID"] != "com.ftcteamhub.app":
+              raise SystemExit("Firebase bundle ID does not match com.ftcteamhub.app")
+          print("Firebase configuration is present and matches the app bundle ID.")
+          PY
 
       - name: Install XcodeGen
         run: brew install xcodegen
 
-      - name: Generate Xcode project from project.yml
+      - name: Generate Xcode project
         run: xcodegen generate
 
-      - name: Build unsigned .app for iOS devices
+      - name: Cache resolved Swift packages
+        uses: actions/cache@v4
+        with:
+          path: ~/Library/Developer/Xcode/DerivedData/SourcePackages
+          key: ${{ runner.os }}-swiftpm-${{ hashFiles('project.yml') }}
+          restore-keys: |
+            ${{ runner.os }}-swiftpm-
+
+      - name: Resolve Swift packages
         run: |
+          xcodebuild -resolvePackageDependencies \
+            -project FTCTeamHub.xcodeproj \
+            -scheme FTCTeamHub
+
+      - name: Build unsigned iOS app
+        run: |
+          set -euo pipefail
+          if [[ "$GITHUB_REF_TYPE" == "tag" ]]; then
+            APP_VERSION="${GITHUB_REF_NAME#v}"
+          else
+            APP_VERSION="1.0.${BUILD_NUMBER}"
+          fi
+          if [[ ! "$APP_VERSION" =~ ^[0-9]+([.][0-9]+){1,2}$ ]]; then
+            echo "Version must be numeric, such as 1.2.3; got: $APP_VERSION" >&2
+            exit 1
+          fi
+          echo "APP_VERSION=$APP_VERSION" >> "$GITHUB_ENV"
           xcodebuild build \
             -project FTCTeamHub.xcodeproj \
             -scheme FTCTeamHub \
             -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
             -configuration Release \
             -derivedDataPath build/DerivedData \
             -quiet \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY="" \
-            DEVELOPMENT_TEAM=""
+            DEVELOPMENT_TEAM="" \
+            MARKETING_VERSION="$APP_VERSION" \
+            CURRENT_PROJECT_VERSION="$BUILD_NUMBER"
 
-      - name: Package .app into an unsigned .ipa
+      - name: Package and verify unsigned IPA
         run: |
-          set -e
+          set -euo pipefail
           APP_PATH="build/DerivedData/Build/Products/Release-iphoneos/FTCTeamHub.app"
-          mkdir -p build/Payload
-          cp -R "$APP_PATH" build/Payload/
-          cd build
-          zip -r FTCTeamHub-unsigned.ipa Payload
-          cd ..
+          IPA_PATH="build/FTCTeamHub-unsigned.ipa"
+          test -d "$APP_PATH" || { echo "Xcode did not produce FTCTeamHub.app" >&2; exit 1; }
+          test -s "$APP_PATH/Info.plist" || { echo "App Info.plist is missing" >&2; exit 1; }
 
-      - name: Upload IPA artifact
+          APP_ID=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP_PATH/Info.plist")
+          APP_VERSION=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP_PATH/Info.plist")
+          APP_BUILD=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$APP_PATH/Info.plist")
+          test "$APP_ID" = "$PRODUCT_BUNDLE_IDENTIFIER" || { echo "Unexpected bundle ID: $APP_ID" >&2; exit 1; }
+          test -x "$APP_PATH/FTCTeamHub" || { echo "App executable is missing" >&2; exit 1; }
+          test -d "$APP_PATH/Assets.car" || test -f "$APP_PATH/Assets.car" || { echo "Compiled app assets are missing" >&2; exit 1; }
+
+          mkdir -p build/Payload
+          ditto "$APP_PATH" build/Payload/FTCTeamHub.app
+          ditto -c -k --sequesterRsrc --keepParent build/Payload "$IPA_PATH"
+          unzip -t "$IPA_PATH"
+          unzip -Z1 "$IPA_PATH" | grep -q '^Payload/FTCTeamHub.app/Info.plist$'
+
+          SOURCE_ZIP="build/FTC-2026-2027-main.zip"
+          git archive --format=zip --prefix=FTC-2026-2027-main/ HEAD --output="$SOURCE_ZIP"
+          unzip -t "$SOURCE_ZIP"
+          unzip -Z1 "$SOURCE_ZIP" | grep -q '^FTC-2026-2027-main/FTCTeamHub/Views/ScoutingTabView.swift$'
+
+          {
+            echo "FTC Team Hub unsigned iOS build"
+            echo "Version: $APP_VERSION ($APP_BUILD)"
+            echo "Bundle ID: $APP_ID"
+            echo "Minimum iOS: $(/usr/libexec/PlistBuddy -c 'Print :MinimumOSVersion' "$APP_PATH/Info.plist")"
+            echo "Source commit: $GITHUB_SHA"
+            echo "Workflow run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+            echo "Signing: Unsigned; sign with a sideloading tool before installation."
+          } > build/BUILD-INFO.txt
+          (
+            cd build
+            shasum -a 256 FTCTeamHub-unsigned.ipa FTC-2026-2027-main.zip > SHA256SUMS.txt
+          )
+
+      - name: Upload downloadable IPA
         uses: actions/upload-artifact@v4
         with:
-          name: FTCTeamHub-unsigned-ipa
-          path: build/FTCTeamHub-unsigned.ipa
+          name: FTCTeamHub-release-${{ github.run_number }}
+          path: |
+            build/FTCTeamHub-unsigned.ipa
+            build/FTC-2026-2027-main.zip
+            build/BUILD-INFO.txt
+            build/SHA256SUMS.txt
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Attach IPA to draft GitHub release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            build/FTCTeamHub-unsigned.ipa \
+            build/FTC-2026-2027-main.zip \
+            build/BUILD-INFO.txt \
+            build/SHA256SUMS.txt \
+            --draft \
+            --title "FTC Team Hub $APP_VERSION" \
+            --notes "Unsigned iOS IPA. Sign it with AltStore, SideStore, Sideloadly, or another trusted sideloading tool before installing. This draft release was built from commit $GITHUB_SHA."

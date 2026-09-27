@@ -18,7 +18,7 @@ struct FTCTeamHubApp: App {
             TestRunRecord.self, Idea.self, ActivityEvent.self, TrackedTeam.self,
             Battery.self, ChecklistRun.self, InventoryItem.self,
             TeamSettings.self, Sponsor.self, BudgetExpense.self,
-            ScoringElement.self
+            ScoringElement.self, ScoutingReport.self
         ])
         let config = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
         return try! ModelContainer(for: schema, configurations: [config])
@@ -43,7 +43,6 @@ struct FTCTeamHubApp: App {
                 .tint((AvatarColor(rawValue: accentColorRaw) ?? .blue).color)
                 .onAppear {
                     syncService.start(modelContext: container.mainContext)
-                    chatService.start()
                     NotificationScheduler.requestAuthorizationIfNeeded()
                     seedDefaultScoringElementsIfNeeded()
                 }
@@ -135,51 +134,31 @@ struct ContentView: View {
     }
 }
 
-// MARK: - Main TabView — ten modules, Dashboard first
+// MARK: - Main TabView
 
 struct MainTabView: View {
     @State private var router = TabRouter()
 
     var body: some View {
-        TabView(selection: Binding(get: { router.selection }, set: { router.selection = $0 })) {
+        TabView(selection: Binding(get: { router.rootSelection }, set: { router.selectRoot($0) })) {
             DashboardTabView()
-                .tag(AppTab.dashboard)
+                .tag(RootTab.dashboard)
                 .tabItem { Label("Dashboard", systemImage: "square.grid.2x2.fill") }
 
-            RosterTabView()
-                .tag(AppTab.roster)
-                .tabItem { Label("Roster", systemImage: "person.3.fill") }
-
-            TestingTabView()
-                .tag(AppTab.testing)
-                .tabItem { Label("Testing", systemImage: "gauge.with.dots.needle.67percent") }
-
-            TasksTabView()
-                .tag(AppTab.tasks)
-                .tabItem { Label("Tasks", systemImage: "checklist") }
-
-            NotebookTabView()
-                .tag(AppTab.notebook)
-                .tabItem { Label("Notebook", systemImage: "book.closed.fill") }
-
-            IdeasTabView()
-                .tag(AppTab.ideas)
-                .tabItem { Label("Ideas", systemImage: "lightbulb.fill") }
+            WorkHubTabView()
+                .tag(RootTab.work)
+                .tabItem { Label("Build", systemImage: "hammer.fill") }
 
             PitOpsTabView()
-                .tag(AppTab.pitOps)
+                .tag(RootTab.pitOps)
                 .tabItem { Label("Pit Ops", systemImage: "wrench.and.screwdriver.fill") }
 
-            ChatTabView()
-                .tag(AppTab.chat)
-                .tabItem { Label("Chat", systemImage: "bubble.left.and.bubble.right.fill") }
-
             LiveDataTabView()
-                .tag(AppTab.liveData)
-                .tabItem { Label("Live Data", systemImage: "antenna.radiowaves.left.and.right") }
+                .tag(RootTab.scouting)
+                .tabItem { Label("Scout", systemImage: "antenna.radiowaves.left.and.right") }
 
-            TeamTabView()
-                .tag(AppTab.team)
+            TeamHubTabView()
+                .tag(RootTab.team)
                 .tabItem { Label("Team", systemImage: "gearshape.fill") }
         }
         .environment(router)

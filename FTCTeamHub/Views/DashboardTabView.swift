@@ -15,6 +15,7 @@ struct DashboardTabView: View {
 
     @Query private var allTasks: [TaskItem]
     @Query private var batteries: [Battery]
+    @Query private var inventoryItems: [InventoryItem]
     @Query private var testRuns: [TestRunRecord]
     @Query(sort: \ActivityEvent.timestamp, order: .reverse) private var activity: [ActivityEvent]
     @Query(sort: \ChecklistRun.timestamp, order: .reverse) private var checklistRuns: [ChecklistRun]
@@ -22,11 +23,30 @@ struct DashboardTabView: View {
     @State private var nextEvent: FTCEventSummary?
     @State private var daysUntilEvent: Int?
     @State private var isLoadingEvent = true
+    @State private var eventLoadError: String?
     @State private var isPresentingSearch = false
 
     private var myOpenTasks: [TaskItem] {
         guard let uid = authManager.currentUser?.id else { return [] }
         return allTasks.filter { $0.assignedToID == uid && $0.status != .done }
+    }
+
+    private var inventoryAlertCard: some View {
+        GroupBox {
+            Button {
+                router.selection = .inventory
+            } label: {
+                HStack {
+                    Image(systemName: "shippingbox.fill").foregroundStyle(.orange)
+                    Text("\(inventoryNeedingAttention.count) inventory item\(inventoryNeedingAttention.count == 1 ? "" : "s") low or needing maintenance")
+                        .font(.subheadline)
+                        .foregroundStyle(.primary)
+                    Spacer()
+                    Image(systemName: "chevron.right").font(.caption).foregroundStyle(.tertiary)
+                }
+            }
+            .buttonStyle(.plain)
+        }
     }
 
     private var overdueTasks: [TaskItem] {
@@ -35,6 +55,10 @@ struct DashboardTabView: View {
 
     private var batteriesNeedingAttention: [Battery] {
         batteries.filter { $0.status == .dead || $0.cycleCount > 40 }
+    }
+
+    private var inventoryNeedingAttention: [InventoryItem] {
+        inventoryItems.filter { $0.isLowStock || $0.needsMaintenance }
     }
 
     private var todaysChecklist: ChecklistRun? {
@@ -54,6 +78,7 @@ struct DashboardTabView: View {
                     statGrid
                     insightsSection
                     if !batteriesNeedingAttention.isEmpty { batteryAlertCard }
+                    if !inventoryNeedingAttention.isEmpty { inventoryAlertCard }
                     if todaysChecklist == nil { checklistNudgeCard }
                     recentActivitySection
                 }
@@ -67,6 +92,7 @@ struct DashboardTabView: View {
             }
             .sheet(isPresented: $isPresentingSearch) { GlobalSearchView() }
             .task { await loadNextEvent() }
+            .refreshable { await loadNextEvent() }
         }
     }
 
@@ -112,8 +138,13 @@ struct DashboardTabView: View {
                         Text(event.name).font(.subheadline.weight(.semibold)).lineLimit(1)
                         Text(days == 0 ? "Today" : days == 1 ? "Tomorrow" : "In \(days) days")
                             .font(.caption).foregroundStyle(.secondary)
+                    } else if let eventLoadError {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Upcoming events unavailable").font(.subheadline.weight(.medium))
+                            Text(eventLoadError).font(.caption).foregroundStyle(.secondary).lineLimit(2)
+                        }
                     } else {
-                        Text("No upcoming events found").font(.subheadline).foregroundStyle(.secondary)
+                        Text("No upcoming events published").font(.subheadline).foregroundStyle(.secondary)
                     }
                 }
                 Spacer()
@@ -129,8 +160,12 @@ struct DashboardTabView: View {
 
     private func loadNextEvent() async {
         isLoadingEvent = true
+        eventLoadError = nil
+        nextEvent = nil
+        daysUntilEvent = nil
         do {
-            let events = try await api.fetchEvents(season: 2026)
+            let season = Calendar.current.component(.year, from: .now)
+            let events = try await api.fetchEvents(season: season)
             let formatter = DateFormatter()
             formatter.dateFormat = "yyyy-MM-dd"
             formatter.timeZone = TimeZone(identifier: "UTC")
@@ -142,12 +177,19 @@ struct DashboardTabView: View {
             .filter { $0.1 >= Calendar.current.startOfDay(for: .now) }
             .sorted { $0.1 < $1.1 }
 
+            if !events.isEmpty && upcoming.isEmpty &&
+                events.allSatisfy({ formatter.date(from: String($0.start.prefix(10))) == nil }) {
+                eventLoadError = "FTCScout returned event dates in an unexpected format."
+            }
             if let soonest = upcoming.first {
                 nextEvent = soonest.0
-                daysUntilEvent = Calendar.current.dateComponents([.day], from: .now, to: soonest.1).day
+                daysUntilEvent = Calendar.current.dateComponents(
+                    [.day], from: Calendar.current.startOfDay(for: .now),
+                    to: Calendar.current.startOfDay(for: soonest.1)
+                ).day
             }
         } catch {
-            nextEvent = nil
+            eventLoadError = error.localizedDescription
         }
         isLoadingEvent = false
     }
@@ -174,8 +216,8 @@ struct DashboardTabView: View {
             ) { router.selection = .notebook }
 
             DashboardStatCard(
-                title: "Scoring & Chat", value: "Open", subtitle: nil, subtitleColor: .secondary,
-                icon: "sum", tint: .indigo
+                title: "Scout & Events", value: "Open", subtitle: "FTCScout + reports", subtitleColor: .secondary,
+                icon: "antenna.radiowaves.left.and.right", tint: .indigo
             ) { router.selection = .liveData }
         }
     }

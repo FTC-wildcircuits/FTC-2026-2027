@@ -107,7 +107,7 @@ struct GlobalSearchView: View {
                         Section("Inventory") {
                             ForEach(filteredInventory) { item in
                                 resultRow(icon: "shippingbox", title: item.name, subtitle: "Bin \(item.binLocation)", tint: .green) {
-                                    router.selection = .pitOps
+                                    router.selection = .inventory
                                     dismiss()
                                 }
                             }

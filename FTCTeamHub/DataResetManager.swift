@@ -17,7 +17,8 @@ import SwiftData
 enum DataResetManager {
 
     /// Deletes all season data: tasks, notebook entries, test runs, ideas,
-    /// activity feed, batteries, checklist runs, and inventory items.
+    /// activity feed, batteries, checklist runs, inventory items, and
+    /// scouting reports.
     /// Does NOT touch AppUser (team roster/login) unless `includeRoster`
     /// is true.
     @MainActor
@@ -30,6 +31,7 @@ enum DataResetManager {
         try deleteAll(Battery.self, in: context)
         try deleteAll(ChecklistRun.self, in: context)
         try deleteAll(InventoryItem.self, in: context)
+        try deleteAll(ScoutingReport.self, in: context)
 
         if includeRoster {
             try deleteAll(AppUser.self, in: context)

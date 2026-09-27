@@ -1,7 +1,8 @@
 # Firebase Setup — Cross-Device Sync
 
-This gets your team's Tasks and Activity Feed syncing live across every
-phone the app is sideloaded onto, using Firebase Firestore's free tier.
+Firestore provides cross-device sync for team records and real-time team
+chat. Notebook entries, inventory, and match-scouting observations are
+stored locally first and pushed to Firestore when the app is configured.
 Everything below is done in a browser — no Mac needed for this part.
 
 ## 1. Create a Firebase project
@@ -25,7 +26,7 @@ Everything below is done in a browser — no Mac needed for this part.
 
 1. In the Firebase console left sidebar, click **Build → Firestore Database**.
 2. Click **Create database**.
-3. Choose **Start in test mode** for now (this allows open read/write with no auth check — fine for an internal team tool during development; see the security note below before relying on it long-term).
+3. Choose **Start in test mode** only for initial setup verification. Test-mode rules allow unauthenticated access and expire; do not use real team data or distribute the app while access is open.
 4. Pick any region close to you and click **Enable**.
 
 ## 5. Confirm your repo has everything
@@ -40,34 +41,32 @@ Your repo should now include:
 
 Go to **Actions → Build Unsigned IPA → Run workflow**. The first build after adding a Swift Package dependency takes noticeably longer (5–10 min instead of 2–3) since GitHub Actions has to resolve and compile the entire Firebase SDK — this is normal, not a stall.
 
-## Security note (read before your event)
+## Security note
 
-"Test mode" Firestore rules allow **anyone with your project's API key** to read/write your database — fine while only your team's devices have the app, but not something to leave on indefinitely. Once things are working, go to **Firestore → Rules** and tighten this, e.g.:
+The app's current email/password account system is local to the app and is
+not Firebase Authentication. Firestore rules requiring `request.auth` will
+reject this app's requests until Firebase Authentication is integrated.
+Conversely, open test-mode rules allow unauthenticated reads and writes.
+Do not use them with real team data or distribute the app until access is
+protected by an authenticated backend and restrictive Firestore rules.
+Keep `GoogleService-Info.plist` out of public repositories; its API key is
+not a substitute for database access control.
 
-```
-rules_version = '2';
-service cloud.firestore {
-  match /databases/{database}/documents {
-    match /{document=**} {
-      allow read, write: if true; // ⚠️ replace before wide distribution
-    }
-  }
-}
-```
+## Current sync coverage
 
-For a small internal team tool that's never publicly distributed, test-mode rules are a reasonable tradeoff — just don't publish your `GoogleService-Info.plist` in a public GitHub repo (keep the repo **Private**, which you already set up earlier).
+The app starts `FirebaseSyncService` automatically and syncs roster profiles,
+tasks, activity, notebook entries, ideas, practice runs, batteries, checklists,
+inventory, match-scouting reports, team settings, sponsors, and expenses.
+Notebook and scouting deletions are propagated to Firestore. Team chat uses a
+separate real-time listener backed by the `chat` collection. Scouting reports
+are based on observations entered by the team; the app does not claim that
+FTCScout provides live match scores or a published match schedule.
 
-## Wiring sync into the rest of the app
-
-`FirebaseSyncService` currently syncs **Tasks** and **Activity Feed** automatically once `start(modelContext:)` runs (already wired in `FTCTeamHubApp.swift`). To make new tasks push to Firestore immediately when created, add one line to `TasksTabView.swift`'s `NewTaskSheet.save()` function, right after `context.insert(task)`:
-
-```swift
-context.insert(task)
-context.insert(ActivityEvent(...)) // existing line
-// ADD THIS LINE:
-syncService?.pushTask(task)
-```
-
-You'll also need to add `@Environment(\.syncService) private var syncService` near the top of `NewTaskSheet`, alongside its other `@Environment` properties. Do the same in the Kanban drag-and-drop handler and the swipe-to-done action in `TaskRow`/`KanbanCard` (call `syncService?.pushTask(task)` right after `task.status = ...`), so status changes sync too.
-
-For `ActivityEvent`, every `context.insert(ActivityEvent(...))` across `TasksTabView.swift`, `TestingTabView.swift`, `NotebookTabView.swift`, and `IdeasTabView.swift` should get a matching `syncService?.pushActivity(event)` call right after it — same pattern, just store the event in a local `let event = ActivityEvent(...)` first so you have a reference to pass.
+Firestore availability depends on a valid `GoogleService-Info.plist`, enabled
+Firestore, network access, and rules that permit the app's current
+unauthenticated Firestore requests. The app's local login does not grant
+Firestore identity or team membership. Local SwiftData records remain
+available on-device when Firestore is unavailable. Firestore may queue chat
+writes in its local cache while offline; the app marks cached messages as
+waiting to sync and keeps the draft until Firestore confirms or rejects the
+send.

@@ -24,6 +24,7 @@ final class FirebaseSyncService {
     private var batteryListener: ListenerRegistration?
     private var checklistListener: ListenerRegistration?
     private var inventoryListener: ListenerRegistration?
+    private var scoutingReportListener: ListenerRegistration?
     private var teamSettingsListener: ListenerRegistration?
     private var sponsorListener: ListenerRegistration?
     private var expenseListener: ListenerRegistration?
@@ -40,6 +41,7 @@ final class FirebaseSyncService {
         listenForBatteryChanges()
         listenForChecklistChanges()
         listenForInventoryChanges()
+        listenForScoutingReportChanges()
         listenForTeamSettingsChanges()
         listenForSponsorChanges()
         listenForExpenseChanges()
@@ -55,6 +57,7 @@ final class FirebaseSyncService {
         batteryListener?.remove()
         checklistListener?.remove()
         inventoryListener?.remove()
+        scoutingReportListener?.remove()
         teamSettingsListener?.remove()
         sponsorListener?.remove()
         expenseListener?.remove()
@@ -406,7 +409,9 @@ final class FirebaseSyncService {
         let data: [String: Any] = [
             "name": item.name, "category": item.category, "binLocation": item.binLocation,
             "quantity": item.quantity, "isCheckedOut": item.isCheckedOut,
-            "checkedOutByName": item.checkedOutByName, "notes": item.notes, "addedAt": item.addedAt
+            "checkedOutByName": item.checkedOutByName, "notes": item.notes,
+            "lowStockThreshold": item.lowStockThreshold, "needsMaintenance": item.needsMaintenance,
+            "addedAt": item.addedAt
         ]
         db.collection("inventory").document(item.id.uuidString).setData(data, merge: true)
     }
@@ -432,8 +437,75 @@ final class FirebaseSyncService {
         item.isCheckedOut = data["isCheckedOut"] as? Bool ?? item.isCheckedOut
         item.checkedOutByName = data["checkedOutByName"] as? String ?? item.checkedOutByName
         item.notes = data["notes"] as? String ?? item.notes
+        item.lowStockThreshold = data["lowStockThreshold"] as? Int ?? item.lowStockThreshold
+        item.needsMaintenance = data["needsMaintenance"] as? Bool ?? item.needsMaintenance
         if existing == nil { context.insert(item) }
         try? context.save()
+    }
+
+    // MARK: - Match scouting
+
+    func pushScoutingReport(_ report: ScoutingReport) {
+        let data: [String: Any] = [
+            "teamNumber": report.teamNumber, "teamName": report.teamName,
+            "eventName": report.eventName, "matchNumber": report.matchNumber,
+            "autonomousScore": report.autonomousScore, "teleOpScore": report.teleOpScore,
+            "endgameScore": report.endgameScore, "capabilities": report.capabilities,
+            "notes": report.notes, "recordedByID": report.recordedByID.uuidString,
+            "recordedByName": report.recordedByName, "observedAt": report.observedAt
+        ]
+        db.collection("scoutingReports").document(report.id.uuidString).setData(data, merge: true)
+    }
+
+    func deleteScoutingReport(id: UUID) {
+        db.collection("scoutingReports").document(id.uuidString).delete()
+    }
+
+    private func listenForScoutingReportChanges() {
+        scoutingReportListener = db.collection("scoutingReports").addSnapshotListener { [weak self] snapshot, error in
+            guard let self, let snapshot, error == nil else { return }
+            for change in snapshot.documentChanges {
+                if change.type == .removed {
+                    self.deleteScoutingReportLocally(id: change.document.documentID)
+                } else {
+                    self.upsertScoutingReport(from: change.document)
+                }
+            }
+        }
+    }
+
+    private func upsertScoutingReport(from document: QueryDocumentSnapshot) {
+        guard let context = modelContext, let id = UUID(uuidString: document.documentID) else { return }
+        let data = document.data()
+        guard let recordedByID = UUID(uuidString: data["recordedByID"] as? String ?? "") else { return }
+        let descriptor = FetchDescriptor<ScoutingReport>(predicate: #Predicate { $0.id == id })
+        let existing = try? context.fetch(descriptor).first
+        let report = existing ?? ScoutingReport(
+            id: id, teamNumber: 0, teamName: "", eventName: "", matchNumber: "",
+            recordedByID: recordedByID, recordedByName: ""
+        )
+        report.teamNumber = data["teamNumber"] as? Int ?? report.teamNumber
+        report.teamName = data["teamName"] as? String ?? report.teamName
+        report.eventName = data["eventName"] as? String ?? report.eventName
+        report.matchNumber = data["matchNumber"] as? String ?? report.matchNumber
+        report.autonomousScore = data["autonomousScore"] as? Int ?? report.autonomousScore
+        report.teleOpScore = data["teleOpScore"] as? Int ?? report.teleOpScore
+        report.endgameScore = data["endgameScore"] as? Int ?? report.endgameScore
+        report.capabilities = data["capabilities"] as? [String] ?? report.capabilities
+        report.notes = data["notes"] as? String ?? report.notes
+        report.recordedByName = data["recordedByName"] as? String ?? report.recordedByName
+        report.observedAt = (data["observedAt"] as? Timestamp)?.dateValue() ?? report.observedAt
+        if existing == nil { context.insert(report) }
+        try? context.save()
+    }
+
+    private func deleteScoutingReportLocally(id documentID: String) {
+        guard let context = modelContext, let id = UUID(uuidString: documentID) else { return }
+        let descriptor = FetchDescriptor<ScoutingReport>(predicate: #Predicate { $0.id == id })
+        if let report = try? context.fetch(descriptor).first {
+            context.delete(report)
+            try? context.save()
+        }
     }
 
     // MARK: - Team Settings (single shared row, doc id fixed as "shared")

@@ -413,7 +413,9 @@ private struct AboutView: View {
                 .padding(.vertical, 12)
             }
             Section("About") {
-                Text("Built for internal team management: roster, testing telemetry, tasks, engineering notebook, ideas, pit ops, scoring strategy, and live FTC competition data — all synced across every teammate's device.")
+                LabeledContent("App version", value: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "Development")
+                LabeledContent("Build", value: Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "Development")
+                Text("Built for team management: roster, testing telemetry, tasks, engineering notebook, ideas, pit ops, match scouting, scoring strategy, and FTCScout event data. Team records sync through your configured Firestore project.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }
