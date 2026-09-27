@@ -1,11 +1,17 @@
 import SwiftUI
+import UIKit
 
 enum FTCBrand {
     static let midnight = Color(red: 0.035, green: 0.055, blue: 0.14)
     static let navy = Color(red: 0.075, green: 0.11, blue: 0.25)
     static let blue = Color(red: 0.14, green: 0.31, blue: 0.55)
     static let cyan = Color(red: 0.16, green: 0.54, blue: 0.62)
-    static let orange = Color(red: 0.91, green: 0.29, blue: 0.12)
+    static let orange = Color(red: 0.73, green: 0.12, blue: 0.16)
+    static let accentText = Color(uiColor: UIColor { traits in
+        traits.userInterfaceStyle == .dark
+            ? UIColor(red: 1, green: 0.48, blue: 0.44, alpha: 1)
+            : UIColor(red: 0.73, green: 0.12, blue: 0.16, alpha: 1)
+    })
     static let violet = Color(red: 0.39, green: 0.35, blue: 0.55)
     static let paper = Color(uiColor: .systemGroupedBackground)
     static let ink = Color(uiColor: .label)

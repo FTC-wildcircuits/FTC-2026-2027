@@ -210,7 +210,7 @@ private struct TeamTabDock: View {
                         Text(tab.title)
                             .font(.system(size: 10, weight: selection == tab ? .semibold : .medium))
                     }
-                    .foregroundStyle(selection == tab ? FTCBrand.midnight : Color.secondary)
+                    .foregroundStyle(selection == tab ? Color.primary : Color.secondary)
                     .frame(maxWidth: .infinity)
                     .frame(height: 54)
                     .background {

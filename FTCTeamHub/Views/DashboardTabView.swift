@@ -168,7 +168,7 @@ struct DashboardTabView: View {
                 Text(title)
                     .font(.system(size: 10, weight: .bold, design: .monospaced))
                     .tracking(1.1)
-                    .foregroundStyle(FTCBrand.orange)
+                    .foregroundStyle(FTCBrand.accentText)
                 Text(detail)
                     .font(.system(.subheadline, design: .rounded, weight: .medium))
                     .foregroundStyle(.secondary)
@@ -205,7 +205,10 @@ struct DashboardTabView: View {
                     if isLoadingEvent {
                         Text("Checking upcoming events…").font(.subheadline).foregroundStyle(.secondary)
                     } else if let event = nextEvent, let days = daysUntilEvent {
-                        Text(event.name).font(.subheadline.weight(.semibold)).lineLimit(1)
+                        Text(event.name)
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(.primary)
+                            .lineLimit(2)
                         Text(days == 0 ? "Today" : days == 1 ? "Tomorrow" : "In \(days) days")
                             .font(.caption).foregroundStyle(.secondary)
                     } else if let eventLoadError {
@@ -223,7 +226,7 @@ struct DashboardTabView: View {
                 } label: {
                     Image(systemName: "arrow.up.right")
                         .font(.caption.weight(.bold))
-                        .foregroundStyle(FTCBrand.orange)
+                        .foregroundStyle(FTCBrand.accentText)
                 }
                 .accessibilityLabel("Open season calendar")
             }
@@ -416,7 +419,7 @@ private struct DashboardStatCard: View {
                 HStack {
                     Image(systemName: icon)
                         .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(FTCBrand.midnight)
+                        .foregroundStyle(FTCBrand.accentText)
                         .frame(width: 31, height: 31)
                         .background(tint.opacity(0.14), in: RoundedRectangle(cornerRadius: 9))
                     Spacer()

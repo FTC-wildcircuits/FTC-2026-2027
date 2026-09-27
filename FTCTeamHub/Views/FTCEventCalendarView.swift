@@ -17,6 +17,9 @@ private struct FTCEvent: Identifiable, Hashable {
     var notebookDisplayTag: String {
         "\(title) · \(date.formatted(date: .abbreviated, time: .omitted))"
     }
+    var labelColor: Color {
+        kind == "TOURNAMENT" ? FTCBrand.accentText : color
+    }
 
     static let all: [FTCEvent] = {
         let calendar = Calendar(identifier: .gregorian)
@@ -202,7 +205,7 @@ struct FTCEventCalendarView: View {
                     }
                 }
                 HStack(spacing: 7) {
-                    Circle().fill(FTCBrand.orange).frame(width: 7, height: 7)
+                    Circle().fill(FTCBrand.accentText).frame(width: 7, height: 7)
                     Text("Team event")
                         .font(.caption2)
                         .foregroundStyle(.white.opacity(0.65))
@@ -228,7 +231,7 @@ struct FTCEventCalendarView: View {
                     .font(.system(.subheadline, design: .rounded, weight: isSelected || isToday ? .bold : .medium))
                     .foregroundStyle(isSelected ? FTCBrand.midnight : .white)
                 Circle()
-                    .fill(event?.color ?? .clear)
+                    .fill(event?.labelColor ?? .clear)
                     .frame(width: 5, height: 5)
             }
             .frame(maxWidth: .infinity)
@@ -292,7 +295,7 @@ struct FTCEventCalendarView: View {
                     Text(event.date.formatted(.dateTime.day()))
                         .font(.system(size: 25, weight: .bold, design: .rounded))
                 }
-                .foregroundStyle(event.color)
+                .foregroundStyle(event.labelColor)
                 .frame(width: 54, height: 58)
                 .background(event.color.opacity(0.13), in: RoundedRectangle(cornerRadius: 16))
 
@@ -301,7 +304,7 @@ struct FTCEventCalendarView: View {
                         Text(event.kind)
                             .font(.system(.caption2, design: .rounded, weight: .bold))
                             .tracking(0.8)
-                            .foregroundStyle(event.color)
+                            .foregroundStyle(event.labelColor)
                         if highlight && event == upcomingEvents.first {
                             Text("NEXT")
                                 .font(.system(.caption2, design: .rounded, weight: .black))
@@ -398,7 +401,7 @@ private struct FTCEventDetailSheet: View {
                     Label(event.kind, systemImage: event.symbol)
                         .font(.system(.caption, design: .rounded, weight: .bold))
                         .tracking(0.7)
-                        .foregroundStyle(event.color)
+                        .foregroundStyle(event.labelColor)
                     Spacer()
                     Text(event.date.formatted(.dateTime.month(.abbreviated).day()))
                         .font(.system(.title3, design: .rounded, weight: .black))

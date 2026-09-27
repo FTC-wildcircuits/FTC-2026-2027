@@ -34,29 +34,23 @@ struct LoginView: View {
             .background(Color(uiColor: .systemGroupedBackground).ignoresSafeArea())
             .scrollDismissesKeyboard(.interactively)
             .toolbar(.hidden, for: .navigationBar)
+            .tint(FTCBrand.orange)
         }
     }
 
     private var identityHeader: some View {
         VStack(alignment: .leading, spacing: 0) {
-            HStack(spacing: 10) {
-                Text("WC")
-                    .font(.system(size: 18, weight: .black, design: .rounded))
-                    .tracking(-1)
-                    .foregroundStyle(.white)
-                    .frame(width: 42, height: 42)
-                    .background(FTCBrand.orange, in: RoundedRectangle(cornerRadius: 10))
-
+            HStack(alignment: .center, spacing: 12) {
+                FTCBrandMark(size: 44)
                 VStack(alignment: .leading, spacing: 3) {
-                    Text("WILD CIRCUITS")
-                        .font(.system(size: 13, weight: .heavy, design: .rounded))
-                        .tracking(1.5)
-                    Text("FIRST TECH CHALLENGE     /     24211")
-                        .font(.system(size: 8, weight: .semibold, design: .monospaced))
-                        .tracking(0.4)
+                    Text("FIRST TECH CHALLENGE")
+                        .font(.system(.subheadline, design: .rounded, weight: .bold))
+                        .foregroundStyle(.primary)
+                    Text("TEAM 24211")
+                        .font(.system(size: 10, weight: .medium, design: .monospaced))
                         .foregroundStyle(.secondary)
                 }
-                Spacer()
+                Spacer(minLength: 8)
                 Text("2026—27")
                     .font(.system(size: 10, weight: .semibold, design: .monospaced))
                     .foregroundStyle(.secondary)
@@ -64,30 +58,20 @@ struct LoginView: View {
             .padding(.top, 18)
 
             Rectangle()
-                .fill(Color.primary.opacity(0.1))
+                .fill(FTCBrand.line)
                 .frame(height: 1)
-                .padding(.top, 18)
+                .padding(.top, 20)
 
-            HStack(alignment: .bottom, spacing: 10) {
-                VStack(alignment: .leading, spacing: 5) {
-                    Text("TEAM\nWORKSPACE")
-                        .font(.system(size: 37, weight: .black, design: .rounded))
-                        .tracking(-1.8)
-                        .lineSpacing(-5)
-                        .foregroundStyle(FTCBrand.midnight)
-                    Text("Robot · Strategy · People")
-                        .font(.subheadline.weight(.medium))
-                        .foregroundStyle(.secondary)
-                }
-                Spacer(minLength: 0)
-                Text("24211")
-                    .font(.system(size: 31, weight: .black, design: .rounded).monospacedDigit())
-                    .tracking(-2)
-                    .foregroundStyle(FTCBrand.orange)
-                    .padding(.bottom, 3)
-                    .accessibilityLabel("Team 24211")
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Wild Circuits")
+                    .font(.system(size: 30, weight: .bold, design: .rounded))
+                    .tracking(-0.8)
+                    .foregroundStyle(.primary)
+                Text("2026–27 team workspace")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
             }
-            .padding(.vertical, 23)
+            .padding(.vertical, 22)
         }
     }
 
@@ -96,9 +80,10 @@ struct LoginView: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text(mode == .signIn ? "Sign in" : "Create your account")
                     .font(.system(size: 23, weight: .bold, design: .rounded))
+                    .foregroundStyle(.primary)
                 Text(mode == .signIn
-                     ? "Use your team account to continue."
-                     : "Set up your Wild Circuits member profile.")
+                     ? "Use your team account."
+                     : "Set up your Wild Circuits profile.")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
             }
@@ -126,7 +111,7 @@ struct LoginView: View {
                     Text(error).fixedSize(horizontal: false, vertical: true)
                 } icon: {
                     Image(systemName: "exclamationmark.circle.fill")
-                        .foregroundStyle(FTCBrand.orange)
+                        .foregroundStyle(FTCBrand.accentText)
                 }
                 .font(.footnote)
                 .foregroundStyle(.primary)
@@ -149,13 +134,7 @@ struct LoginView: View {
                 .foregroundStyle(.white)
                 .padding(.horizontal, 17)
                 .frame(height: 52)
-                .background(FTCBrand.midnight, in: RoundedRectangle(cornerRadius: 12))
-                .overlay(alignment: .leading) {
-                    RoundedRectangle(cornerRadius: 2)
-                        .fill(FTCBrand.orange)
-                        .frame(width: 4, height: 24)
-                        .padding(.leading, 1)
-                }
+                .background(FTCBrand.orange, in: RoundedRectangle(cornerRadius: 12))
             }
             .buttonStyle(PressableButtonStyle())
             .disabled(!isValid)
@@ -188,7 +167,7 @@ struct LoginView: View {
                     Text(option.rawValue)
                         .font(.system(.subheadline, design: .rounded,
                                       weight: mode == option ? .semibold : .regular))
-                        .foregroundStyle(mode == option ? .primary : .secondary)
+                        .foregroundStyle(mode == option ? Color.primary : Color.secondary)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 10)
                         .background {
@@ -218,7 +197,7 @@ struct LoginView: View {
         HStack(spacing: 11) {
             Image(systemName: symbol)
                 .font(.subheadline)
-                .foregroundStyle(FTCBrand.midnight.opacity(0.68))
+                .foregroundStyle(.secondary)
                 .frame(width: 19)
             TextField(title, text: text)
                 .textContentType(type)
@@ -241,7 +220,7 @@ struct LoginView: View {
         HStack(spacing: 11) {
             Image(systemName: "lock")
                 .font(.subheadline)
-                .foregroundStyle(FTCBrand.midnight.opacity(0.68))
+                .foregroundStyle(.secondary)
                 .frame(width: 19)
             Group {
                 if passwordVisible {
