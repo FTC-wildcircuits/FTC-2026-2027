@@ -67,6 +67,37 @@ final class FirebaseSyncService {
         expenseListener?.remove()
     }
 
+    func syncLocalRecords(in context: ModelContext) throws {
+        guard isRunning else { return }
+        let users = try context.fetch(FetchDescriptor<AppUser>())
+        let tasks = try context.fetch(FetchDescriptor<TaskItem>())
+        let activity = try context.fetch(FetchDescriptor<ActivityEvent>())
+        let notebook = try context.fetch(FetchDescriptor<NotebookEntry>())
+        let ideas = try context.fetch(FetchDescriptor<Idea>())
+        let testRuns = try context.fetch(FetchDescriptor<TestRunRecord>())
+        let batteries = try context.fetch(FetchDescriptor<Battery>())
+        let checklists = try context.fetch(FetchDescriptor<ChecklistRun>())
+        let inventory = try context.fetch(FetchDescriptor<InventoryItem>())
+        let scoutingReports = try context.fetch(FetchDescriptor<ScoutingReport>())
+        let settings = try context.fetch(FetchDescriptor<TeamSettings>())
+        let sponsors = try context.fetch(FetchDescriptor<Sponsor>())
+        let expenses = try context.fetch(FetchDescriptor<BudgetExpense>())
+
+        users.forEach(pushUser)
+        tasks.forEach(pushTask)
+        activity.forEach(pushActivity)
+        notebook.forEach(pushNotebookEntry)
+        ideas.forEach(pushIdea)
+        testRuns.forEach(pushTestRun)
+        batteries.forEach(pushBattery)
+        checklists.forEach(pushChecklistRun)
+        inventory.forEach(pushInventoryItem)
+        scoutingReports.forEach(pushScoutingReport)
+        settings.forEach(pushTeamSettings)
+        sponsors.forEach(pushSponsor)
+        expenses.forEach(pushExpense)
+    }
+
     // MARK: - Roster (AppUser)
 
     func pushUser(_ user: AppUser) {

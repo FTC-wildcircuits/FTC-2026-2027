@@ -60,6 +60,7 @@ private struct ProfileSettingsView: View {
     @AppStorage("accentColorRaw") private var accentColorRaw: String = AvatarColor.blue.rawValue
     @AppStorage("cloudSyncEnabled") private var cloudSyncEnabled = false
     @State private var isPresentingReset = false
+    @State private var cloudSyncError: String?
 
     private var teamSettings: TeamSettings {
         if let existing = teamSettingsList.first { return existing }
@@ -86,15 +87,28 @@ private struct ProfileSettingsView: View {
                 Toggle("Enable team cloud sync", isOn: $cloudSyncEnabled)
                     .onChange(of: cloudSyncEnabled) { _, enabled in
                         if enabled {
-                            syncService?.start(modelContext: context)
-                            authManager.setSyncService(syncService)
+                            do {
+                                guard let syncService else {
+                                    cloudSyncError = "The sync service is unavailable."
+                                    cloudSyncEnabled = false
+                                    return
+                                }
+                                syncService.start(modelContext: context)
+                                try syncService.syncLocalRecords(in: context)
+                                authManager.setSyncService(syncService)
+                            } catch {
+                                syncService?.stop()
+                                authManager.setSyncService(nil)
+                                cloudSyncError = error.localizedDescription
+                                cloudSyncEnabled = false
+                            }
                         } else {
                             syncService?.stop()
                             authManager.setSyncService(nil)
                         }
                     }
                 Text(cloudSyncEnabled
-                     ? "Cloud sync can download existing team records from Firestore."
+                     ? "Sync is on. This device’s local records are uploaded and existing team records may download."
                      : "Off for a clean start. Turn on only after securing Firestore rules; local app accounts do not authenticate with Firebase.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -116,6 +130,14 @@ private struct ProfileSettingsView: View {
                             }
                             .sheet(isPresented: $isPresentingReset) {
                                 ResetConfirmationSheet()
+                            }
+                            .alert("Could not enable cloud sync", isPresented: Binding(
+                                get: { cloudSyncError != nil },
+                                set: { if !$0 { cloudSyncError = nil } }
+                            )) {
+                                Button("OK", role: .cancel) { cloudSyncError = nil }
+                            } message: {
+                                Text(cloudSyncError ?? "Please try again.")
                             }
                             .onTapGesture {
                                 UIImpactFeedbackGenerator(style: .light).impactOccurred()

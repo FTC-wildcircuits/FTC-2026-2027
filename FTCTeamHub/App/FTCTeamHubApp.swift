@@ -96,7 +96,7 @@ struct ContentView: View {
                     Image(systemName: "exclamationmark.triangle.fill")
                         .font(.system(size: 42))
                         .foregroundStyle(FTCBrand.orange)
-                    Text("Clean start could not finish")
+                    Text("Workspace setup could not finish")
                         .font(.title2.bold())
                     Text(launchError)
                         .font(.footnote)
@@ -146,6 +146,7 @@ struct ContentView: View {
             }
             if cloudSyncEnabled {
                 syncService?.start(modelContext: modelContext)
+                try syncService?.syncLocalRecords(in: modelContext)
             }
             authManager = AuthenticationManager(
                 modelContext: modelContext,

@@ -63,8 +63,8 @@ API-key restrictions do not replace Firestore security rules.
 ## Current sync coverage
 
 The app keeps Firebase sync off on a clean start. Enable it from **Team →
-Profile → Data & Sync** when ready; enabling sync can download existing
-records from Firestore. The app then syncs roster profiles,
+Profile → Data & Sync** when ready; enabling uploads this device's existing
+records and can download existing records from Firestore. The app then syncs roster profiles,
 tasks, activity, notebook entries, ideas, practice runs, batteries, checklists,
 inventory, match-scouting reports, team settings, sponsors, and expenses.
 Notebook and scouting deletions are propagated to Firestore while sync is
