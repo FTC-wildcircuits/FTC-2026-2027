@@ -58,6 +58,8 @@ private struct ProfileSettingsView: View {
     @Environment(\.syncService) private var syncService
     @Environment(AuthenticationManager.self) private var authManager
     @AppStorage("accentColorRaw") private var accentColorRaw: String = AvatarColor.blue.rawValue
+    @AppStorage("cloudSyncEnabled") private var cloudSyncEnabled = false
+    @State private var isPresentingReset = false
 
     private var teamSettings: TeamSettings {
         if let existing = teamSettingsList.first { return existing }
@@ -80,6 +82,27 @@ private struct ProfileSettingsView: View {
                 TeamSettingsFields(teamSettings: teamSettings, syncService: syncService)
             }
 
+            Section("Data & Sync") {
+                Toggle("Enable team cloud sync", isOn: $cloudSyncEnabled)
+                    .onChange(of: cloudSyncEnabled) { _, enabled in
+                        if enabled {
+                            syncService?.start(modelContext: context)
+                            authManager.setSyncService(syncService)
+                        } else {
+                            syncService?.stop()
+                            authManager.setSyncService(nil)
+                        }
+                    }
+                Text(cloudSyncEnabled
+                     ? "Cloud sync can download existing team records from Firestore."
+                     : "Off for a clean start. Turn on only after securing Firestore rules; local app accounts do not authenticate with Firebase.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Button("Reset all local app data", role: .destructive) {
+                    isPresentingReset = true
+                }
+            }
+
             Section("App Accent Color") {
                 HStack(spacing: 12) {
                     ForEach(AvatarColor.allCases) { swatch in
@@ -90,6 +113,9 @@ private struct ProfileSettingsView: View {
                                 if accentColorRaw == swatch.rawValue {
                                     Image(systemName: "checkmark").font(.caption.bold()).foregroundStyle(.white)
                                 }
+                            }
+                            .sheet(isPresented: $isPresentingReset) {
+                                ResetConfirmationSheet()
                             }
                             .onTapGesture {
                                 UIImpactFeedbackGenerator(style: .light).impactOccurred()
@@ -400,9 +426,6 @@ private struct AboutView: View {
                         .foregroundStyle(Color.accentColor)
                     Text("FTC Team Hub").font(.headline)
 
-                    // Hidden reset unlock lives here: tap this label 7
-                    // times within 3 seconds to reveal "Reset App Data".
-                    // No visible reset button exists anywhere else.
                     SecretResetTrigger {
                         Text("Version 1.0")
                             .font(.caption)

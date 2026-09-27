@@ -62,11 +62,14 @@ API-key restrictions do not replace Firestore security rules.
 
 ## Current sync coverage
 
-The app starts `FirebaseSyncService` automatically and syncs roster profiles,
+The app keeps Firebase sync off on a clean start. Enable it from **Team →
+Profile → Data & Sync** when ready; enabling sync can download existing
+records from Firestore. The app then syncs roster profiles,
 tasks, activity, notebook entries, ideas, practice runs, batteries, checklists,
 inventory, match-scouting reports, team settings, sponsors, and expenses.
-Notebook and scouting deletions are propagated to Firestore. Team chat uses a
-separate real-time listener backed by the `chat` collection. Scouting reports
+Notebook and scouting deletions are propagated to Firestore while sync is
+enabled. Team chat connects to its real-time `chat` collection only while
+cloud sync is enabled. Scouting reports
 are based on observations entered by the team; the app does not claim that
 FTCScout provides live match scores or a published match schedule.
 

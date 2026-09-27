@@ -56,15 +56,18 @@ struct SecretResetTrigger<Content: View>: View {
     }
 }
 
-private struct ResetConfirmationSheet: View {
+struct ResetConfirmationSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var context
+    @Environment(\.syncService) private var syncService
     @Environment(AuthenticationManager.self) private var authManager
+    @AppStorage("cloudSyncEnabled") private var cloudSyncEnabled = false
 
     @State private var confirmationText = ""
-    @State private var includeRoster = false
+    @State private var includeRoster = true
     @State private var isWiping = false
     @State private var resultMessage: String?
+    @State private var resetError: String?
     private let expectedPhrase = "RESET"
 
     var body: some View {
@@ -74,15 +77,15 @@ private struct ResetConfirmationSheet: View {
                     Label("This cannot be undone", systemImage: "exclamationmark.triangle.fill")
                         .foregroundStyle(.red)
                         .font(.headline)
-                    Text("This permanently deletes every task, notebook entry, idea, test run, battery, checklist run, inventory item, and activity log on this device.")
+                    Text("This permanently deletes all team records and accounts stored on this device. Shared Firestore records are not deleted.")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 }
 
                 Section {
-                    Toggle("Also delete the team roster & log everyone out", isOn: $includeRoster)
+                    Toggle("Delete team accounts and sign everyone out", isOn: $includeRoster)
                 } footer: {
-                    Text("Leave this off to wipe season data but keep everyone's accounts.")
+                    Text("Turn this off only if you want to keep the current account on this device.")
                 }
 
                 Section("Type RESET to confirm") {
@@ -94,6 +97,11 @@ private struct ResetConfirmationSheet: View {
                 if let resultMessage {
                     Section {
                         Text(resultMessage).font(.footnote).foregroundStyle(.green)
+                    }
+                }
+                if let resetError {
+                    Section {
+                        Text(resetError).font(.footnote).foregroundStyle(.red)
                     }
                 }
 
@@ -121,9 +129,11 @@ private struct ResetConfirmationSheet: View {
     private func performWipe() {
         isWiping = true
         do {
+            cloudSyncEnabled = false
+            syncService?.stop()
             try DataResetManager.wipeAllLocalData(context: context, includeRoster: includeRoster)
             UINotificationFeedbackGenerator().notificationOccurred(.success)
-            resultMessage = "Done. All local data has been wiped."
+            resultMessage = "Done. Local data is cleared; shared Firestore data was not changed."
             if includeRoster {
                 authManager.signOut()
             }
@@ -132,7 +142,7 @@ private struct ResetConfirmationSheet: View {
             }
         } catch {
             UINotificationFeedbackGenerator().notificationOccurred(.error)
-            resultMessage = "Reset failed: \(error.localizedDescription)"
+            resetError = "Reset failed: \(error.localizedDescription)"
             isWiping = false
         }
     }

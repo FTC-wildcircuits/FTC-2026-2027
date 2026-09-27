@@ -42,35 +42,12 @@ struct FTCTeamHubApp: App {
                 .environment(\.chatService, chatService)
                 .tint((AvatarColor(rawValue: accentColorRaw) ?? .blue).color)
                 .onAppear {
-                    syncService.start(modelContext: container.mainContext)
                     NotificationScheduler.requestAuthorizationIfNeeded()
-                    seedDefaultScoringElementsIfNeeded()
                 }
         }
         .modelContainer(container)
     }
 
-    /// Seeds a starter set of placeholder scoring elements (0 points each)
-    /// so the Scoring Simulator isn't empty on first launch — the team
-    /// edits the point values once the real Game Manual is released.
-    private func seedDefaultScoringElementsIfNeeded() {
-        let context = container.mainContext
-        let descriptor = FetchDescriptor<ScoringElement>()
-        guard let count = try? context.fetchCount(descriptor), count == 0 else { return }
-
-        let defaults: [(String, ScoringPhase, Int)] = [
-            ("Leave / Depart Start", .autonomous, 0),
-            ("Score Game Element (Auto)", .autonomous, 0),
-            ("Score Game Element (TeleOp)", .teleop, 0),
-            ("Cycle Bonus", .teleop, 0),
-            ("Park", .endgame, 0),
-            ("Climb / Hang", .endgame, 0)
-        ]
-        for (index, entry) in defaults.enumerated() {
-            context.insert(ScoringElement(name: entry.0, phase: entry.1, pointValue: entry.2, sortOrder: index))
-        }
-        try? context.save()
-    }
 }
 
 // MARK: - Environment keys
@@ -108,10 +85,31 @@ struct ContentView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.syncService) private var syncService
     @State private var authManager: AuthenticationManager?
+    @State private var launchError: String?
+    @AppStorage("com.ftcteamhub.clean-slate.2026-27") private var cleanSlateApplied = false
+    @AppStorage("cloudSyncEnabled") private var cloudSyncEnabled = false
 
     var body: some View {
         Group {
-            if let authManager {
+            if let launchError {
+                VStack(spacing: 16) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .font(.system(size: 42))
+                        .foregroundStyle(FTCBrand.orange)
+                    Text("Clean start could not finish")
+                        .font(.title2.bold())
+                    Text(launchError)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                    Button("Try again") {
+                        self.launchError = nil
+                        prepareWorkspace()
+                    }
+                    .buttonStyle(.borderedProminent)
+                }
+                .padding(28)
+            } else if let authManager {
                 if authManager.currentUser != nil {
                     MainTabView()
                         .environment(authManager)
@@ -122,14 +120,39 @@ struct ContentView: View {
                         .transition(.opacity)
                 }
             } else {
-                ProgressView()
+                FTCLoadingView()
             }
         }
         .animation(.easeInOut(duration: 0.2), value: authManager?.currentUser?.id)
-        .onAppear {
-            if authManager == nil {
-                authManager = AuthenticationManager(modelContext: modelContext, syncService: syncService)
+        .onAppear(perform: prepareWorkspace)
+        .onChange(of: cloudSyncEnabled) { _, enabled in
+            if enabled {
+                syncService?.start(modelContext: modelContext)
+                authManager?.setSyncService(syncService)
+            } else {
+                syncService?.stop()
+                authManager?.setSyncService(nil)
             }
+        }
+    }
+
+    private func prepareWorkspace() {
+        guard authManager == nil else { return }
+        do {
+            if !cleanSlateApplied {
+                cloudSyncEnabled = false
+                try DataResetManager.wipeAllLocalData(context: modelContext, includeRoster: true)
+                cleanSlateApplied = true
+            }
+            if cloudSyncEnabled {
+                syncService?.start(modelContext: modelContext)
+            }
+            authManager = AuthenticationManager(
+                modelContext: modelContext,
+                syncService: cloudSyncEnabled ? syncService : nil
+            )
+        } catch {
+            launchError = error.localizedDescription
         }
     }
 }
@@ -162,6 +185,7 @@ struct MainTabView: View {
                 .tabItem { Label("Team", systemImage: "gearshape.fill") }
         }
         .environment(router)
+        .preferredColorScheme(.dark)
     }
 }
 

@@ -29,8 +29,11 @@ final class FirebaseSyncService {
     private var sponsorListener: ListenerRegistration?
     private var expenseListener: ListenerRegistration?
     private weak var modelContext: ModelContext?
+    private var isRunning = false
 
     func start(modelContext: ModelContext) {
+        guard !isRunning else { return }
+        isRunning = true
         self.modelContext = modelContext
         listenForUserChanges()
         listenForTaskChanges()
@@ -48,6 +51,7 @@ final class FirebaseSyncService {
     }
 
     func stop() {
+        isRunning = false
         taskListener?.remove()
         activityListener?.remove()
         userListener?.remove()
@@ -66,6 +70,7 @@ final class FirebaseSyncService {
     // MARK: - Roster (AppUser)
 
     func pushUser(_ user: AppUser) {
+        guard isRunning else { return }
         let data: [String: Any] = [
             "email": user.email, "name": user.name, "roleRaw": user.roleRaw,
             "avatarColorRaw": user.avatarColorRaw, "passwordHash": user.passwordHash, "joinedAt": user.joinedAt
@@ -98,6 +103,7 @@ final class FirebaseSyncService {
     // MARK: - Tasks
 
     func pushTask(_ task: TaskItem) {
+        guard isRunning else { return }
         let data: [String: Any] = [
             "title": task.title, "taskDescription": task.taskDescription,
             "assignedToID": task.assignedToID?.uuidString ?? "", "assignedToName": task.assignedToName,
@@ -138,6 +144,7 @@ final class FirebaseSyncService {
     // MARK: - Activity feed
 
     func pushActivity(_ event: ActivityEvent) {
+        guard isRunning else { return }
         let data: [String: Any] = [
             "authorID": event.authorID.uuidString, "authorName": event.authorName,
             "kind": event.kind.rawValue, "message": event.message, "timestamp": event.timestamp
@@ -175,6 +182,7 @@ final class FirebaseSyncService {
     // MARK: - Notebook entries
 
     func pushNotebookEntry(_ entry: NotebookEntry) {
+        guard isRunning else { return }
         var data: [String: Any] = [
             "authorID": entry.authorID.uuidString, "authorName": entry.authorName,
             "title": entry.title, "content": entry.content, "tags": entry.tags, "timestamp": entry.timestamp
@@ -192,6 +200,7 @@ final class FirebaseSyncService {
     }
 
     func deleteNotebookEntry(id: UUID) {
+        guard isRunning else { return }
         db.collection("notebook").document(id.uuidString).delete()
     }
 
@@ -252,6 +261,7 @@ final class FirebaseSyncService {
     // MARK: - Ideas
 
     func pushIdea(_ idea: Idea) {
+        guard isRunning else { return }
         let data: [String: Any] = [
             "authorID": idea.authorID.uuidString, "authorName": idea.authorName,
             "summary": idea.summary, "detail": idea.detail,
@@ -287,6 +297,7 @@ final class FirebaseSyncService {
     // MARK: - Test runs
 
     func pushTestRun(_ record: TestRunRecord) {
+        guard isRunning else { return }
         var data: [String: Any] = [
             "driverID": record.driverID.uuidString, "driverName": record.driverName, "date": record.date,
             "autoScore": record.autoScore, "teleopScore": record.teleopScore, "endgameScore": record.endgameScore,
@@ -333,6 +344,7 @@ final class FirebaseSyncService {
     // MARK: - Batteries
 
     func pushBattery(_ battery: Battery) {
+        guard isRunning else { return }
         let data: [String: Any] = [
             "label": battery.label, "statusRaw": battery.statusRaw, "cycleCount": battery.cycleCount,
             "lastChargedAt": battery.lastChargedAt as Any, "notes": battery.notes, "addedAt": battery.addedAt
@@ -365,6 +377,7 @@ final class FirebaseSyncService {
     // MARK: - Checklists
 
     func pushChecklistRun(_ run: ChecklistRun) {
+        guard isRunning else { return }
         var data: [String: Any] = [
             "typeRaw": run.typeRaw, "completedByID": run.completedByID.uuidString,
             "completedByName": run.completedByName, "timestamp": run.timestamp
@@ -406,6 +419,7 @@ final class FirebaseSyncService {
     // MARK: - Inventory
 
     func pushInventoryItem(_ item: InventoryItem) {
+        guard isRunning else { return }
         let data: [String: Any] = [
             "name": item.name, "category": item.category, "binLocation": item.binLocation,
             "quantity": item.quantity, "isCheckedOut": item.isCheckedOut,
@@ -446,6 +460,7 @@ final class FirebaseSyncService {
     // MARK: - Match scouting
 
     func pushScoutingReport(_ report: ScoutingReport) {
+        guard isRunning else { return }
         let data: [String: Any] = [
             "teamNumber": report.teamNumber, "teamName": report.teamName,
             "eventName": report.eventName, "matchNumber": report.matchNumber,
@@ -458,6 +473,7 @@ final class FirebaseSyncService {
     }
 
     func deleteScoutingReport(id: UUID) {
+        guard isRunning else { return }
         db.collection("scoutingReports").document(id.uuidString).delete()
     }
 
@@ -511,6 +527,7 @@ final class FirebaseSyncService {
     // MARK: - Team Settings (single shared row, doc id fixed as "shared")
 
     func pushTeamSettings(_ settings: TeamSettings) {
+        guard isRunning else { return }
         let data: [String: Any] = [
             "teamNumber": settings.teamNumber, "teamName": settings.teamName,
             "rookieYear": settings.rookieYear, "seasonName": settings.seasonName
@@ -536,6 +553,7 @@ final class FirebaseSyncService {
     // MARK: - Sponsors
 
     func pushSponsor(_ sponsor: Sponsor) {
+        guard isRunning else { return }
         let data: [String: Any] = [
             "name": sponsor.name, "contactName": sponsor.contactName, "contactEmail": sponsor.contactEmail,
             "pledgedAmount": sponsor.pledgedAmount, "receivedAmount": sponsor.receivedAmount,
@@ -571,6 +589,7 @@ final class FirebaseSyncService {
     // MARK: - Budget Expenses
 
     func pushExpense(_ expense: BudgetExpense) {
+        guard isRunning else { return }
         let data: [String: Any] = [
             "item": expense.item, "amount": expense.amount, "category": expense.category,
             "date": expense.date, "notes": expense.notes, "addedByName": expense.addedByName

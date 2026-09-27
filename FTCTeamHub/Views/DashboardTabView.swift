@@ -89,6 +89,10 @@ struct DashboardTabView: View {
                 ToolbarItem(placement: .primaryAction) {
                     Button { isPresentingSearch = true } label: { Image(systemName: "magnifyingglass") }
                 }
+                ToolbarItem(placement: .primaryAction) {
+                    Button { router.selection = .calendar } label: { Image(systemName: "calendar") }
+                        .accessibilityLabel("Season calendar")
+                }
             }
             .sheet(isPresented: $isPresentingSearch) { GlobalSearchView() }
             .task { await loadNextEvent() }
@@ -99,13 +103,23 @@ struct DashboardTabView: View {
     // MARK: - Header
 
     private var header: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(greeting)
-                .font(.title2.bold())
-            if let user = authManager.currentUser {
-                Label(user.role.rawValue, systemImage: user.role.systemImage)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
+        FTCBrandCard {
+            HStack(spacing: 16) {
+                FTCBrandMark(size: 56)
+                VStack(alignment: .leading, spacing: 5) {
+                    Text("WILD CIRCUITS  ·  FTC 2026–27")
+                        .font(.system(.caption2, design: .rounded, weight: .bold))
+                        .tracking(0.8)
+                        .foregroundStyle(FTCBrand.cyan)
+                    Text(greeting)
+                        .font(.system(.title3, design: .rounded, weight: .bold))
+                        .foregroundStyle(.white)
+                    if let user = authManager.currentUser {
+                        Label(user.role.rawValue, systemImage: user.role.systemImage)
+                            .font(.subheadline)
+                            .foregroundStyle(.white.opacity(0.62))
+                    }
+                }
             }
         }
     }

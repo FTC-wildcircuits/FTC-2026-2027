@@ -9,14 +9,14 @@ import Foundation
 import Observation
 
 enum AppTab: String, CaseIterable {
-    case dashboard
+    case dashboard, calendar
     case workHome, roster, testing, tasks, notebook, ideas
     case pitOps, inventory, chat, liveData, teamHome, team
 
     var rootTab: RootTab {
         switch self {
         case .dashboard: return .dashboard
-        case .workHome, .roster, .testing, .tasks, .notebook, .ideas: return .work
+        case .workHome, .calendar, .roster, .testing, .tasks, .notebook, .ideas: return .work
         case .pitOps, .inventory: return .pitOps
         case .liveData: return .scouting
         case .chat, .teamHome, .team: return .team

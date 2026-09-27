@@ -21,7 +21,7 @@ final class AuthenticationManager {
     var errorMessage: String?
 
     private let modelContext: ModelContext
-    private let syncService: FirebaseSyncService?
+    private var syncService: FirebaseSyncService?
     private let sessionKey = "com.ftcteamhub.session.userID"
 
     init(modelContext: ModelContext, syncService: FirebaseSyncService? = nil) {
@@ -37,6 +37,10 @@ final class AuthenticationManager {
         let descriptor = FetchDescriptor<AppUser>(predicate: #Predicate { $0.id == uuid })
         if let user = try? modelContext.fetch(descriptor).first {
             currentUser = user
+        }
+
+        func setSyncService(_ service: FirebaseSyncService?) {
+            syncService = service
         }
     }
 

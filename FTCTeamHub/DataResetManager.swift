@@ -2,25 +2,18 @@
 //  DataResetManager.swift
 //  FTCTeamHub
 //
-//  Wipes local SwiftData records. Reached only through a hidden gesture
-//  (see SecretResetTrigger below) — never a plainly visible button —
-//  specifically so it can't be tapped by accident in the pit.
-//
-//  NOTE: this clears the on-device database only. If Firestore sync is
-//  still holding copies of this data, it can re-sync back down. Ask for
-//  SyncService.swift if you also want a matching cloud-side wipe.
+//  Clears this device's SwiftData, local app preferences, session token,
+//  and notifications. Shared Firestore records are intentionally untouched.
 //
 
 import Foundation
 import SwiftData
+import SwiftUI
 
 enum DataResetManager {
 
-    /// Deletes all season data: tasks, notebook entries, test runs, ideas,
-    /// activity feed, batteries, checklist runs, inventory items, and
-    /// scouting reports.
-    /// Does NOT touch AppUser (team roster/login) unless `includeRoster`
-    /// is true.
+    /// Deletes all locally stored team records. The Firestore copy is not
+    /// changed; keep sync disabled until the team is ready to restore it.
     @MainActor
     static func wipeAllLocalData(context: ModelContext, includeRoster: Bool) throws {
         try deleteAll(TaskItem.self, in: context)
@@ -32,12 +25,23 @@ enum DataResetManager {
         try deleteAll(ChecklistRun.self, in: context)
         try deleteAll(InventoryItem.self, in: context)
         try deleteAll(ScoutingReport.self, in: context)
+        try deleteAll(TrackedTeam.self, in: context)
+        try deleteAll(TeamSettings.self, in: context)
+        try deleteAll(Sponsor.self, in: context)
+        try deleteAll(BudgetExpense.self, in: context)
+        try deleteAll(ScoringElement.self, in: context)
 
         if includeRoster {
             try deleteAll(AppUser.self, in: context)
         }
 
         try context.save()
+        UserDefaults.standard.set(AvatarColor.blue.rawValue, forKey: "accentColorRaw")
+        UserDefaults.standard.set(false, forKey: "cloudSyncEnabled")
+        NotificationScheduler.cancelAllReminders()
+        if includeRoster {
+            KeychainService.delete("com.ftcteamhub.session.userID")
+        }
     }
 
     private static func deleteAll<T: PersistentModel>(_ type: T.Type, in context: ModelContext) throws {

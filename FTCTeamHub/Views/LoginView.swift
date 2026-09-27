@@ -30,7 +30,7 @@ struct LoginView: View {
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(spacing: 24) {
+                VStack(spacing: 22) {
                     header
 
                     Picker("Mode", selection: $mode) {
@@ -63,22 +63,32 @@ struct LoginView: View {
                     Spacer(minLength: 24)
                 }
             }
+            .background(FTCBrand.background.ignoresSafeArea())
             .scrollDismissesKeyboard(.interactively)
         }
+        .preferredColorScheme(.dark)
     }
 
     private var header: some View {
-        VStack(spacing: 6) {
-            Image(systemName: "shield.checkerboard")
-                .font(.system(size: 40))
-                .foregroundStyle(.tint)
-                .padding(.top, 40)
-            Text("FTC Team Hub")
-                .font(.title2.bold())
-            Text(mode == .signIn ? "Sign in to your team workspace" : "Set up your team member profile")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
+        FTCBrandCard {
+            VStack(spacing: 12) {
+                FTCBrandMark(size: 82)
+                Text("WILD CIRCUITS")
+                    .font(.system(.caption, design: .rounded, weight: .black))
+                    .tracking(3)
+                    .foregroundStyle(FTCBrand.cyan)
+                Text("Built by the team.\nReady for the next challenge.")
+                    .font(.system(.title2, design: .rounded, weight: .bold))
+                    .multilineTextAlignment(.center)
+                    .foregroundStyle(.white)
+                Text(mode == .signIn ? "Sign in to your FTC workspace" : "Create your team member profile")
+                    .font(.subheadline)
+                    .foregroundStyle(.white.opacity(0.62))
+            }
+            .frame(maxWidth: .infinity)
         }
+        .padding(.horizontal)
+        .padding(.top, 20)
     }
 
     @ViewBuilder

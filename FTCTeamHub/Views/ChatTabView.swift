@@ -3,6 +3,8 @@ import SwiftUI
 struct ChatTabView: View {
     @Environment(\.chatService) private var chatService
     @Environment(AuthenticationManager.self) private var authManager
+    @Environment(TabRouter.self) private var router
+    @AppStorage("cloudSyncEnabled") private var cloudSyncEnabled = false
     @State private var draft = ""
     @State private var isSending = false
     @State private var sendError: String?
@@ -10,7 +12,16 @@ struct ChatTabView: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                if let chatService {
+                if !cloudSyncEnabled {
+                    ContentUnavailableView {
+                        Label("Team chat is paused", systemImage: "bubble.left.and.bubble.right")
+                    } description: {
+                        Text("Enable team cloud sync in Team settings when you are ready to connect.")
+                    } actions: {
+                        Button("Open team settings") { router.selection = .team }
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else if let chatService {
                     if chatService.messages.isEmpty {
                         switch chatService.connectionState {
                         case .connecting:
@@ -93,33 +104,44 @@ struct ChatTabView: View {
                                            description: Text("Chat service isn't connected."))
                 }
 
-                Divider()
+                if cloudSyncEnabled {
+                    Divider()
 
-                HStack(spacing: 8) {
-                    TextField("Message", text: $draft, axis: .vertical)
-                        .textFieldStyle(.roundedBorder)
-                        .lineLimit(1...4)
-                        .disabled(isSending || chatService == nil)
-                    Button {
-                        send()
-                    } label: {
-                        Image(systemName: isSending ? "hourglass" : "arrow.up.circle.fill")
-                            .font(.system(size: 30))
+                    HStack(spacing: 8) {
+                        TextField("Message", text: $draft, axis: .vertical)
+                            .textFieldStyle(.roundedBorder)
+                            .lineLimit(1...4)
+                            .disabled(isSending || chatService == nil)
+                        Button {
+                            send()
+                        } label: {
+                            Image(systemName: isSending ? "hourglass" : "arrow.up.circle.fill")
+                                .font(.system(size: 30))
+                        }
+                        .disabled(draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isSending || chatService == nil)
                     }
-                    .disabled(draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isSending || chatService == nil)
-                }
-                .padding()
+                    .padding()
 
-                if let sendError {
-                    Text(sendError)
-                        .font(.caption)
-                        .foregroundStyle(.red)
-                        .padding(.horizontal)
-                        .padding(.bottom, 8)
+                    if let sendError {
+                        Text(sendError)
+                            .font(.caption)
+                            .foregroundStyle(.red)
+                            .padding(.horizontal)
+                            .padding(.bottom, 8)
+                    }
                 }
             }
             .navigationTitle("Team Chat")
-            .onAppear { chatService?.start() }
+            .onAppear {
+                if cloudSyncEnabled { chatService?.start() }
+            }
+            .onChange(of: cloudSyncEnabled) { _, enabled in
+                if enabled {
+                    chatService?.start()
+                } else {
+                    chatService?.stop()
+                }
+            }
             .onDisappear { chatService?.stop() }
         }
     }

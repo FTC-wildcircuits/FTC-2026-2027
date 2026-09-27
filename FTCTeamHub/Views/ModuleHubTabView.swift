@@ -6,6 +6,7 @@ struct WorkHubTabView: View {
     var body: some View {
         Group {
             switch router.selection {
+            case .calendar: FTCEventCalendarView()
             case .roster: RosterTabView()
             case .testing: TestingTabView()
             case .tasks: TasksTabView()
@@ -20,6 +21,7 @@ struct WorkHubTabView: View {
         NavigationStack {
             List {
                 Section("Robot & strategy") {
+                    module("Season calendar", detail: "FTC 2026–27 meets and event notebooks", icon: "calendar", tab: .calendar)
                     module("Testing", detail: "Practice runs and performance trends", icon: "gauge.with.dots.needle.67percent", tab: .testing)
                     module("Engineering notebook", detail: "Design notes, tests, and configuration logs", icon: "book.closed.fill", tab: .notebook)
                     module("Ideas", detail: "Team proposals and brainstorming", icon: "lightbulb.fill", tab: .ideas)
