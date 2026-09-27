@@ -135,6 +135,7 @@ struct FTCEventCalendarView: View {
                     .presentationDragIndicator(.visible)
             }
         }
+        .environment(\.colorScheme, .dark)
     }
 
     private var seasonHeader: some View {

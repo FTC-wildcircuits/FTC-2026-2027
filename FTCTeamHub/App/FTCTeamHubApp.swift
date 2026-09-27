@@ -186,7 +186,59 @@ struct MainTabView: View {
                 .tabItem { Label("Team", systemImage: "gearshape.fill") }
         }
         .environment(router)
-        .preferredColorScheme(.dark)
+        .toolbar(.hidden, for: .tabBar)
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            TeamTabDock(selection: router.rootSelection, select: router.selectRoot)
+        }
+    }
+}
+
+private struct TeamTabDock: View {
+    let selection: RootTab
+    let select: (RootTab) -> Void
+
+    var body: some View {
+        HStack(spacing: 4) {
+            ForEach(RootTab.allCases) { tab in
+                Button {
+                    select(tab)
+                } label: {
+                    VStack(spacing: 5) {
+                        Image(systemName: tab.systemImage)
+                            .font(.system(size: 18, weight: selection == tab ? .semibold : .regular))
+                            .frame(height: 22)
+                        Text(tab.title)
+                            .font(.system(size: 10, weight: selection == tab ? .semibold : .medium))
+                    }
+                    .foregroundStyle(selection == tab ? FTCBrand.midnight : Color.secondary)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 54)
+                    .background {
+                        if selection == tab {
+                            RoundedRectangle(cornerRadius: 12)
+                                .fill(FTCBrand.orange.opacity(0.14))
+                                .overlay(alignment: .top) {
+                                    Capsule().fill(FTCBrand.orange).frame(width: 20, height: 2)
+                                }
+                        }
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(tab.title)
+                .accessibilityAddTraits(selection == tab ? .isSelected : [])
+            }
+        }
+        .padding(.horizontal, 10)
+        .padding(.top, 7)
+        .padding(.bottom, 2)
+        .background {
+            Color(uiColor: .systemBackground)
+                .overlay(alignment: .top) {
+                    Rectangle().fill(FTCBrand.line).frame(height: 0.5)
+                }
+                .ignoresSafeArea(edges: .bottom)
+        }
     }
 }
 

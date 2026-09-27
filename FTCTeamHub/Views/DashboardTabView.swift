@@ -25,6 +25,7 @@ struct DashboardTabView: View {
     @State private var isLoadingEvent = true
     @State private var eventLoadError: String?
     @State private var isPresentingSearch = false
+    @State private var isPresentingQuickLog = false
 
     private var myOpenTasks: [TaskItem] {
         guard let uid = authManager.currentUser?.id else { return [] }
@@ -72,29 +73,61 @@ struct DashboardTabView: View {
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(alignment: .leading, spacing: 20) {
+                VStack(alignment: .leading, spacing: 22) {
                     header
                     nextEventCard
+                    sectionHeading("TEAM SNAPSHOT", detail: "Your operation at a glance")
                     statGrid
-                    insightsSection
+                    sectionHeading("PIT STATUS", detail: "Items that may need a hand")
                     if !batteriesNeedingAttention.isEmpty { batteryAlertCard }
                     if !inventoryNeedingAttention.isEmpty { inventoryAlertCard }
                     if todaysChecklist == nil { checklistNudgeCard }
+                    sectionHeading("PERFORMANCE", detail: "Signals from your own practice data")
+                    insightsSection
+                    sectionHeading("LATEST UPDATES", detail: "Recent work from your crew")
                     recentActivitySection
                 }
-                .padding()
+                .padding(.horizontal, 18)
+                .padding(.top, 10)
+                .padding(.bottom, 24)
             }
-            .navigationTitle("Dashboard")
+            .background(Color(uiColor: .systemGroupedBackground).ignoresSafeArea())
+            .navigationTitle("Overview")
+            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .primaryAction) {
-                    Button { isPresentingSearch = true } label: { Image(systemName: "magnifyingglass") }
-                }
-                ToolbarItem(placement: .primaryAction) {
-                    Button { router.selection = .calendar } label: { Image(systemName: "calendar") }
-                        .accessibilityLabel("Season calendar")
+                ToolbarItemGroup(placement: .topBarTrailing) {
+                    Button { router.selection = .calendar } label: {
+                        Image(systemName: "calendar")
+                    }
+                    .accessibilityLabel("Season calendar")
+                    Menu {
+                        Button {
+                            isPresentingQuickLog = true
+                        } label: {
+                            Label("New practice log", systemImage: "square.and.pencil")
+                        }
+                        Button {
+                            router.selection = .notebook
+                        } label: {
+                            Label("Open engineering notebook", systemImage: "book.closed")
+                        }
+                        Button {
+                            isPresentingSearch = true
+                        } label: {
+                            Label("Search team records", systemImage: "magnifyingglass")
+                        }
+                    } label: {
+                        Image(systemName: "plus")
+                            .font(.system(size: 15, weight: .bold))
+                            .foregroundStyle(.white)
+                            .frame(width: 30, height: 30)
+                            .background(FTCBrand.orange, in: RoundedRectangle(cornerRadius: 9))
+                    }
+                    .accessibilityLabel("Create or find team records")
                 }
             }
             .sheet(isPresented: $isPresentingSearch) { GlobalSearchView() }
+            .sheet(isPresented: $isPresentingQuickLog) { QuickPracticeLogSheet() }
             .task { await loadNextEvent() }
             .refreshable { await loadNextEvent() }
         }
@@ -103,25 +136,47 @@ struct DashboardTabView: View {
     // MARK: - Header
 
     private var header: some View {
-        FTCBrandCard {
-            HStack(spacing: 16) {
-                FTCBrandMark(size: 56)
-                VStack(alignment: .leading, spacing: 5) {
-                    Text("WILD CIRCUITS  ·  FTC 2026–27")
-                        .font(.system(.caption2, design: .rounded, weight: .bold))
-                        .tracking(0.8)
-                        .foregroundStyle(FTCBrand.cyan)
-                    Text(greeting)
-                        .font(.system(.title3, design: .rounded, weight: .bold))
+        VStack(alignment: .leading, spacing: 9) {
+            HStack(spacing: 7) {
+                Circle().fill(FTCBrand.orange).frame(width: 7, height: 7)
+                Text("WILD CIRCUITS     /     2026—27")
+                    .font(.system(size: 10, weight: .bold, design: .monospaced))
+                    .tracking(0.6)
+                    .foregroundStyle(.secondary)
+                Spacer()
+                if let user = authManager.currentUser {
+                    Text(user.initials)
+                        .font(.system(size: 10, weight: .bold, design: .rounded))
                         .foregroundStyle(.white)
-                    if let user = authManager.currentUser {
-                        Label(user.role.rawValue, systemImage: user.role.systemImage)
-                            .font(.subheadline)
-                            .foregroundStyle(.white.opacity(0.62))
-                    }
+                        .frame(width: 31, height: 31)
+                        .background(user.avatarColor.color, in: Circle())
                 }
             }
+            Text(greeting)
+                .font(.system(size: 30, weight: .bold, design: .rounded))
+                .tracking(-0.8)
+                .foregroundStyle(.primary)
+            Text("Team 24211  ·  \(Date.now.formatted(.dateTime.weekday(.wide).month(.wide).day()))")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
         }
+    }
+
+    private func sectionHeading(_ title: String, detail: String) -> some View {
+        HStack(alignment: .bottom) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title)
+                    .font(.system(size: 10, weight: .bold, design: .monospaced))
+                    .tracking(1.1)
+                    .foregroundStyle(FTCBrand.orange)
+                Text(detail)
+                    .font(.system(.subheadline, design: .rounded, weight: .medium))
+                    .foregroundStyle(.secondary)
+            }
+            Spacer()
+        }
+        .padding(.top, 2)
+        .accessibilityElement(children: .combine)
     }
 
     private var greeting: String {
@@ -141,9 +196,10 @@ struct DashboardTabView: View {
         GroupBox {
             HStack {
                 Image(systemName: "calendar.badge.clock")
-                    .font(.title2)
-                    .foregroundStyle(Color.accentColor)
-                    .frame(width: 32)
+                    .font(.title3.weight(.semibold))
+                    .foregroundStyle(.white)
+                    .frame(width: 42, height: 42)
+                    .background(FTCBrand.midnight, in: RoundedRectangle(cornerRadius: 12))
 
                 VStack(alignment: .leading, spacing: 2) {
                     if isLoadingEvent {
@@ -163,13 +219,17 @@ struct DashboardTabView: View {
                 }
                 Spacer()
                 Button {
-                    router.selection = .liveData
+                    router.selection = .calendar
                 } label: {
-                    Image(systemName: "chevron.right").foregroundStyle(.tertiary)
+                    Image(systemName: "arrow.up.right")
+                        .font(.caption.weight(.bold))
+                        .foregroundStyle(FTCBrand.orange)
                 }
+                .accessibilityLabel("Open season calendar")
             }
-            .padding(.vertical, 4)
+            .padding(14)
         }
+        .groupBoxStyle(DashboardGroupBoxStyle())
     }
 
     private func loadNextEvent() async {
@@ -240,11 +300,7 @@ struct DashboardTabView: View {
 
     private var insightsSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Image(systemName: "sparkles")
-                Text("Insights").font(.headline)
-            }
-            Text("On-device trend analysis of your own data — not cloud AI.")
+            Text("Trends are calculated on this device from records entered by your team.")
                 .font(.caption2).foregroundStyle(.tertiary)
 
             VStack(spacing: 8) {
@@ -359,15 +415,17 @@ private struct DashboardStatCard: View {
             VStack(alignment: .leading, spacing: 8) {
                 HStack {
                     Image(systemName: icon)
-                        .font(.subheadline)
-                        .foregroundStyle(tint)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(FTCBrand.midnight)
+                        .frame(width: 31, height: 31)
+                        .background(tint.opacity(0.14), in: RoundedRectangle(cornerRadius: 9))
                     Spacer()
                 }
                 Text(value)
-                    .font(.title2.bold().monospacedDigit())
+                    .font(.system(size: 27, weight: .bold, design: .rounded).monospacedDigit())
                     .foregroundStyle(.primary)
                 Text(title)
-                    .font(.caption)
+                    .font(.system(.caption, design: .rounded, weight: .medium))
                     .foregroundStyle(.secondary)
                 if let subtitle {
                     Text(subtitle)
@@ -376,10 +434,146 @@ private struct DashboardStatCard: View {
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(12)
-            .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 14))
+            .padding(14)
+            .frame(minHeight: 136, alignment: .topLeading)
+            .background(Color(uiColor: .secondarySystemGroupedBackground),
+                        in: RoundedRectangle(cornerRadius: 17, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 17, style: .continuous)
+                    .stroke(Color.primary.opacity(0.045), lineWidth: 1)
+            }
         }
         .buttonStyle(.plain)
+    }
+}
+
+private struct DashboardGroupBoxStyle: GroupBoxStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.content
+            .background(Color(uiColor: .secondarySystemGroupedBackground),
+                        in: RoundedRectangle(cornerRadius: 17, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 17, style: .continuous)
+                    .stroke(Color.primary.opacity(0.045), lineWidth: 1)
+            }
+    }
+}
+
+private struct QuickPracticeLogSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var context
+    @Environment(\.syncService) private var syncService
+    @Environment(AuthenticationManager.self) private var authManager
+
+    @State private var title = ""
+    @State private var area = "Robot"
+    @State private var observation = ""
+    @State private var followUp = ""
+    @State private var saveError: String?
+
+    private let areas = ["Robot", "Software", "Autonomous", "Drive practice", "Pit"]
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    LabeledContent("DATE", value: Date.now.formatted(date: .complete, time: .omitted))
+                    TextField("Log title", text: $title, prompt: Text("What did you work on?"))
+                    Picker("Area", selection: $area) {
+                        ForEach(areas, id: \.self) { Text($0).tag($0) }
+                    }
+                } header: {
+                    Text("PRACTICE LOG")
+                } footer: {
+                    Text("Saved to the engineering notebook and tagged for search.")
+                }
+
+                Section("Observation / result") {
+                    TextEditor(text: $observation)
+                        .frame(minHeight: 120)
+                        .overlay(alignment: .topLeading) {
+                            if observation.isEmpty {
+                                Text("What happened? Record measurements, behavior, or decisions.")
+                                    .font(.body)
+                                    .foregroundStyle(.tertiary)
+                                    .padding(.top, 8)
+                                    .padding(.leading, 5)
+                                    .allowsHitTesting(false)
+                            }
+                        }
+                }
+                Section("Next test") {
+                    TextEditor(text: $followUp)
+                        .frame(minHeight: 85)
+                        .overlay(alignment: .topLeading) {
+                            if followUp.isEmpty {
+                                Text("What will the team try next?")
+                                    .font(.body)
+                                    .foregroundStyle(.tertiary)
+                                    .padding(.top, 8)
+                                    .padding(.leading, 5)
+                                    .allowsHitTesting(false)
+                            }
+                        }
+                }
+                if let saveError {
+                    Section {
+                        Label(saveError, systemImage: "exclamationmark.triangle.fill")
+                            .foregroundStyle(.red)
+                    }
+                }
+            }
+            .navigationTitle("New Practice Log")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Save") { save() }
+                        .disabled(!canSave)
+                }
+            }
+        }
+    }
+
+    private var canSave: Bool {
+        !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
+        !observation.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    private func save() {
+        guard let author = authManager.currentUser else {
+            saveError = "Sign in to save a practice log."
+            return
+        }
+        var content = "## Observation / result\n\(observation.trimmingCharacters(in: .whitespacesAndNewlines))"
+        if !followUp.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            content += "\n\n## Next test\n\(followUp.trimmingCharacters(in: .whitespacesAndNewlines))"
+        }
+        let entry = NotebookEntry(
+            authorID: author.id,
+            authorName: author.name,
+            title: title.trimmingCharacters(in: .whitespacesAndNewlines),
+            content: content,
+            tags: ["Practice Log", area]
+        )
+        context.insert(entry)
+        let activity = ActivityEvent(
+            authorID: author.id,
+            authorName: author.name,
+            kind: .notebookEntry,
+            message: "added a \(area.lowercased()) practice log: \(entry.title)"
+        )
+        context.insert(activity)
+        do {
+            try context.save()
+            syncService?.pushNotebookEntry(entry)
+            syncService?.pushActivity(activity)
+            dismiss()
+        } catch {
+            saveError = error.localizedDescription
+        }
     }
 }
 

@@ -77,8 +77,11 @@ tracking. The clean-slate build clears local team records once on first
 launch, starts with cloud sync off, and includes an in-app 2026–27 calendar
 for the five supplied events with a linked engineering notebook and
 persistent robot/pit readiness checklist for each. The login screen has a
-custom team identity, animated SwiftUI loading mark, and password visibility
-controls.
+restrained Wild Circuits / Team 24211 identity, clear sign-in and account
+creation, and accessible password visibility controls. The app uses a custom
+five-section navigation dock, a team status dashboard, and a quick practice
+log form that records an observation, follow-up test, work area, and author
+directly in the searchable engineering notebook.
 Enabling cloud sync is optional and may download existing shared records;
 it also uploads local records from this device. The reset does not delete
 Firestore data. FTCScout match scores are not fabricated: scores in scouting

@@ -24,8 +24,30 @@ enum AppTab: String, CaseIterable {
     }
 }
 
-enum RootTab: Hashable {
+enum RootTab: Hashable, CaseIterable, Identifiable {
     case dashboard, work, pitOps, scouting, team
+
+    var id: Self { self }
+
+    var title: String {
+        switch self {
+        case .dashboard: return "Home"
+        case .work: return "Build"
+        case .pitOps: return "Pit"
+        case .scouting: return "Scout"
+        case .team: return "Team"
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .dashboard: return "square.grid.2x2"
+        case .work: return "hammer"
+        case .pitOps: return "wrench.and.screwdriver"
+        case .scouting: return "scope"
+        case .team: return "person.2"
+        }
+    }
 }
 
 @MainActor
