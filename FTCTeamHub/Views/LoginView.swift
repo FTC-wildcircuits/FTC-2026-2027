@@ -4,10 +4,15 @@ import UIKit
 struct LoginView: View {
     @Environment(AuthenticationManager.self) private var authManager
 
-    enum Mode: String, CaseIterable, Identifiable {
-        case signIn = "Sign In"
-        case signUp = "Create Account"
-        var id: String { rawValue }
+    private enum Mode {
+        case signIn
+        case signUp
+    }
+
+    private enum Field: Hashable {
+        case name
+        case email
+        case password
     }
 
     @State private var mode: Mode = .signIn
@@ -17,274 +22,228 @@ struct LoginView: View {
     @State private var role: TeamRole = .builder
     @State private var avatarColor: AvatarColor = .blue
     @State private var passwordVisible = false
+    @FocusState private var focusedField: Field?
+
+    private var isSigningUp: Bool {
+        mode == .signUp
+    }
+
+    private var isValid: Bool {
+        let hasCredentials = email.contains("@") && password.count >= 4
+        return hasCredentials && (!isSigningUp || !name.trimmingCharacters(in: .whitespaces).isEmpty)
+    }
 
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(spacing: 0) {
+                VStack(alignment: .leading, spacing: 0) {
                     identityHeader
-                    signInPanel
-                    footer
+                    welcomeHeading
+                    credentialFields
+                    if isSigningUp {
+                        profileFields
+                            .padding(.top, 22)
+                            .transition(.move(edge: .top).combined(with: .opacity))
+                    }
+                    if let error = authManager.errorMessage {
+                        errorNotice(error)
+                            .padding(.top, 18)
+                    }
+                    primaryAction
+                        .padding(.top, 24)
+                    modeAction
+                        .padding(.top, 20)
+                    privacyNote
+                        .padding(.top, 34)
                 }
-                .frame(maxWidth: 480)
+                .frame(maxWidth: 440, alignment: .leading)
                 .frame(maxWidth: .infinity)
-                .padding(.horizontal, 20)
-                .padding(.bottom, 28)
+                .padding(.horizontal, 26)
+                .padding(.top, 14)
+                .padding(.bottom, 34)
             }
             .background(Color(uiColor: .systemGroupedBackground).ignoresSafeArea())
             .scrollDismissesKeyboard(.interactively)
             .toolbar(.hidden, for: .navigationBar)
             .tint(FTCBrand.orange)
+            .animation(.easeInOut(duration: 0.2), value: isSigningUp)
         }
     }
 
     private var identityHeader: some View {
         VStack(alignment: .leading, spacing: 0) {
-            HStack(alignment: .center, spacing: 12) {
-                FTCBrandMark(size: 44)
+            HStack(spacing: 12) {
+                FTCBrandMark(size: 46)
+                    .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 3) {
-                    Text("FIRST TECH CHALLENGE")
+                    Text("WILD CIRCUITS")
                         .font(.system(.subheadline, design: .rounded, weight: .bold))
+                        .tracking(0.7)
                         .foregroundStyle(.primary)
-                    Text("TEAM 24211")
-                        .font(.system(size: 10, weight: .medium, design: .monospaced))
+                    Text("FIRST TECH CHALLENGE  ·  24211")
+                        .font(.system(size: 9, weight: .medium, design: .monospaced))
                         .foregroundStyle(.secondary)
                 }
-                Spacer(minLength: 8)
-                Text("2026—27")
+                Spacer()
+                Text("2026–27")
                     .font(.system(size: 10, weight: .semibold, design: .monospaced))
                     .foregroundStyle(.secondary)
             }
-            .padding(.top, 18)
+            .padding(.vertical, 12)
 
             Rectangle()
                 .fill(FTCBrand.line)
                 .frame(height: 1)
-                .padding(.top, 20)
-
-            VStack(alignment: .leading, spacing: 6) {
-                Text("Wild Circuits")
-                    .font(.system(size: 30, weight: .bold, design: .rounded))
-                    .tracking(-0.8)
-                    .foregroundStyle(.primary)
-                Text("2026–27 team workspace")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-            }
-            .padding(.vertical, 22)
         }
     }
 
-    private var signInPanel: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text(mode == .signIn ? "Sign in" : "Create your account")
-                    .font(.system(size: 23, weight: .bold, design: .rounded))
-                    .foregroundStyle(.primary)
-                Text(mode == .signIn
-                     ? "Use your team account."
-                     : "Set up your Wild Circuits profile.")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-            }
-
-            modePicker
-
-            VStack(spacing: 13) {
-                if mode == .signUp {
-                    inputField("Full name", symbol: "person", text: $name, type: .name,
-                               capitalization: .words)
-                        .transition(.move(edge: .top).combined(with: .opacity))
-                }
-                inputField("Email address", symbol: "envelope", text: $email,
-                           type: .emailAddress, capitalization: .never, keyboard: .emailAddress)
-                passwordField
-            }
-
-            if mode == .signUp {
-                profileFields
-                    .transition(.move(edge: .top).combined(with: .opacity))
-            }
-
-            if let error = authManager.errorMessage {
-                Label {
-                    Text(error).fixedSize(horizontal: false, vertical: true)
-                } icon: {
-                    Image(systemName: "exclamationmark.circle.fill")
-                        .foregroundStyle(FTCBrand.accentText)
-                }
-                .font(.footnote)
+    private var welcomeHeading: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(isSigningUp ? "Join the team." : "Welcome back.")
+                .font(.system(size: 36, weight: .bold, design: .rounded))
+                .tracking(-1.2)
                 .foregroundStyle(.primary)
-                .padding(12)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(Color(uiColor: .tertiarySystemGroupedBackground),
-                            in: RoundedRectangle(cornerRadius: 12))
-                .accessibilityElement(children: .combine)
-            }
-
-            Button(action: submit) {
-                HStack {
-                    Spacer()
-                    Text(mode == .signIn ? "Continue" : "Create account")
-                        .font(.system(.subheadline, design: .rounded, weight: .bold))
-                    Spacer()
-                    Image(systemName: "arrow.right")
-                        .font(.subheadline.weight(.bold))
-                }
-                .foregroundStyle(.white)
-                .padding(.horizontal, 17)
-                .frame(height: 52)
-                .background(FTCBrand.orange, in: RoundedRectangle(cornerRadius: 12))
-            }
-            .buttonStyle(PressableButtonStyle())
-            .disabled(!isValid)
-            .opacity(isValid ? 1 : 0.5)
-
-            if mode == .signIn {
-                Label("Account stored on this iPhone", systemImage: "iphone")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity)
-            }
+                .fixedSize(horizontal: false, vertical: true)
+            Text(isSigningUp
+                 ? "Create your member profile to get started."
+                 : "Sign in to your team workspace.")
+                .font(.body)
+                .foregroundStyle(.secondary)
         }
-        .padding(20)
-        .background(Color(uiColor: .secondarySystemGroupedBackground),
-                    in: RoundedRectangle(cornerRadius: 19, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: 19, style: .continuous)
-                .stroke(Color.primary.opacity(0.05), lineWidth: 1)
-        }
-        .animation(.easeInOut(duration: 0.2), value: mode)
+        .padding(.top, 36)
+        .padding(.bottom, 30)
     }
 
-    private var modePicker: some View {
-        HStack(spacing: 4) {
-            ForEach(Mode.allCases) { option in
-                Button {
-                    authManager.errorMessage = nil
-                    mode = option
-                } label: {
-                    Text(option.rawValue)
-                        .font(.system(.subheadline, design: .rounded,
-                                      weight: mode == option ? .semibold : .regular))
-                        .foregroundStyle(mode == option ? Color.primary : Color.secondary)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 10)
-                        .background {
-                            if mode == option {
-                                RoundedRectangle(cornerRadius: 9)
-                                    .fill(Color(uiColor: .secondarySystemGroupedBackground))
-                            }
+    private var credentialFields: some View {
+        VStack(alignment: .leading, spacing: 19) {
+            if isSigningUp {
+                labeledField("Full name", symbol: "person", field: .name) {
+                    TextField("Your name", text: $name)
+                        .textContentType(.name)
+                        .textInputAutocapitalization(.words)
+                        .submitLabel(.next)
+                        .focused($focusedField, equals: .name)
+                        .onSubmit { focusedField = .email }
+                }
+                .transition(.move(edge: .top).combined(with: .opacity))
+            }
+
+            labeledField("Email", symbol: "envelope", field: .email) {
+                TextField("name@example.com", text: $email)
+                    .textContentType(.emailAddress)
+                    .keyboardType(.emailAddress)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                    .submitLabel(.next)
+                    .focused($focusedField, equals: .email)
+                    .onSubmit { focusedField = .password }
+            }
+
+            labeledField("Password", symbol: "lock", field: .password) {
+                HStack(spacing: 8) {
+                    Group {
+                        if passwordVisible {
+                            TextField("Enter your password", text: $password)
+                        } else {
+                            SecureField("Enter your password", text: $password)
                         }
+                    }
+                    .textContentType(isSigningUp ? .newPassword : .password)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                    .submitLabel(.go)
+                    .focused($focusedField, equals: .password)
+                    .onSubmit(submit)
+
+                    Button {
+                        passwordVisible.toggle()
+                        focusedField = .password
+                    } label: {
+                        Image(systemName: passwordVisible ? "eye.slash" : "eye")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                            .frame(width: 32, height: 40)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(passwordVisible ? "Hide password" : "Show password")
                 }
-                .buttonStyle(.plain)
-                .accessibilityAddTraits(mode == option ? .isSelected : [])
             }
         }
-        .padding(4)
-        .background(Color(uiColor: .tertiarySystemGroupedBackground),
-                    in: RoundedRectangle(cornerRadius: 12))
     }
 
-    private func inputField(
+    private func labeledField<Content: View>(
         _ title: String,
         symbol: String,
-        text: Binding<String>,
-        type: UITextContentType,
-        capitalization: TextInputAutocapitalization,
-        keyboard: UIKeyboardType = .default
+        field: Field,
+        @ViewBuilder content: () -> Content
     ) -> some View {
-        HStack(spacing: 11) {
-            Image(systemName: symbol)
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-                .frame(width: 19)
-            TextField(title, text: text)
-                .textContentType(type)
-                .keyboardType(keyboard)
-                .textInputAutocapitalization(capitalization)
-                .autocorrectionDisabled()
-                .accessibilityLabel(title)
-        }
-        .padding(.horizontal, 14)
-        .frame(height: 51)
-        .background(Color(uiColor: .tertiarySystemGroupedBackground),
-                    in: RoundedRectangle(cornerRadius: 12))
-        .overlay {
-            RoundedRectangle(cornerRadius: 12)
-                .stroke(Color.primary.opacity(0.05), lineWidth: 1)
-        }
-    }
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title)
+                .font(.system(.subheadline, design: .rounded, weight: .semibold))
+                .foregroundStyle(.primary)
 
-    private var passwordField: some View {
-        HStack(spacing: 11) {
-            Image(systemName: "lock")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-                .frame(width: 19)
-            Group {
-                if passwordVisible {
-                    TextField("Password", text: $password)
-                } else {
-                    SecureField("Password", text: $password)
-                }
-            }
-            .textContentType(mode == .signUp ? .newPassword : .password)
-            .textInputAutocapitalization(.never)
-            .autocorrectionDisabled()
-            Button {
-                passwordVisible.toggle()
-            } label: {
-                Image(systemName: passwordVisible ? "eye.slash" : "eye")
+            HStack(spacing: 11) {
+                Image(systemName: symbol)
+                    .font(.subheadline)
                     .foregroundStyle(.secondary)
+                    .frame(width: 18)
+                content()
+                    .font(.body)
+                    .foregroundStyle(.primary)
+                    .accessibilityLabel(title)
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel(passwordVisible ? "Hide password" : "Show password")
-        }
-        .padding(.horizontal, 14)
-        .frame(height: 51)
-        .background(Color(uiColor: .tertiarySystemGroupedBackground),
-                    in: RoundedRectangle(cornerRadius: 12))
-        .overlay {
-            RoundedRectangle(cornerRadius: 12)
-                .stroke(Color.primary.opacity(0.05), lineWidth: 1)
+            .padding(.horizontal, 14)
+            .frame(minHeight: 54)
+            .background(Color(uiColor: .secondarySystemGroupedBackground),
+                        in: RoundedRectangle(cornerRadius: 13, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 13, style: .continuous)
+                    .stroke(focusedField == field ? FTCBrand.accentText.opacity(0.7) : FTCBrand.line,
+                            lineWidth: focusedField == field ? 1.5 : 1)
+            }
         }
     }
 
     private var profileFields: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("TEAM PROFILE")
-                .font(.system(size: 10, weight: .bold, design: .rounded))
-                .tracking(1.2)
-                .foregroundStyle(.secondary)
-
-            Menu {
-                ForEach(TeamRole.allCases) { option in
-                    Button {
-                        role = option
-                    } label: {
-                        Label(option.rawValue, systemImage: option.systemImage)
+        VStack(alignment: .leading, spacing: 17) {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Team role")
+                    .font(.system(.subheadline, design: .rounded, weight: .semibold))
+                    .foregroundStyle(.primary)
+                Menu {
+                    ForEach(TeamRole.allCases) { option in
+                        Button {
+                            role = option
+                        } label: {
+                            Label(option.rawValue, systemImage: option.systemImage)
+                        }
+                    }
+                } label: {
+                    HStack {
+                        Label(role.rawValue, systemImage: role.systemImage)
+                            .foregroundStyle(.primary)
+                        Spacer()
+                        Image(systemName: "chevron.up.chevron.down")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding(.horizontal, 14)
+                    .frame(minHeight: 52)
+                    .background(Color(uiColor: .secondarySystemGroupedBackground),
+                                in: RoundedRectangle(cornerRadius: 13, style: .continuous))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 13, style: .continuous)
+                            .stroke(FTCBrand.line, lineWidth: 1)
                     }
                 }
-            } label: {
-                HStack {
-                    Label(role.rawValue, systemImage: role.systemImage)
-                        .foregroundStyle(.primary)
-                    Spacer()
-                    Image(systemName: "chevron.up.chevron.down")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                .padding(13)
-                .background(Color(uiColor: .tertiarySystemGroupedBackground),
-                            in: RoundedRectangle(cornerRadius: 12))
+                .accessibilityLabel("Team role, \(role.rawValue)")
             }
 
-            HStack(spacing: 12) {
-                Text("PROFILE COLOR")
-                    .font(.system(size: 9, weight: .bold, design: .rounded))
-                    .tracking(0.8)
-                    .foregroundStyle(.secondary)
+            HStack {
+                Text("Profile color")
+                    .font(.system(.subheadline, design: .rounded, weight: .semibold))
+                    .foregroundStyle(.primary)
                 Spacer()
                 ForEach(AvatarColor.allCases) { swatch in
                     Button {
@@ -293,17 +252,19 @@ struct LoginView: View {
                     } label: {
                         Circle()
                             .fill(swatch.color)
-                            .frame(width: 24, height: 24)
+                            .frame(width: 27, height: 27)
                             .overlay {
                                 if avatarColor == swatch {
                                     Image(systemName: "checkmark")
-                                        .font(.system(size: 9, weight: .black))
+                                        .font(.system(size: 10, weight: .bold))
                                         .foregroundStyle(.white)
                                 }
                             }
+                            .padding(3)
                             .overlay {
-                                Circle().stroke(avatarColor == swatch ? Color.primary : .clear, lineWidth: 1.5)
-                                    .padding(-3)
+                                Circle()
+                                    .stroke(avatarColor == swatch ? Color.primary : .clear,
+                                            lineWidth: 1)
                             }
                     }
                     .buttonStyle(.plain)
@@ -314,42 +275,98 @@ struct LoginView: View {
         }
     }
 
-    private var footer: some View {
-        VStack(spacing: 9) {
-            Rectangle()
-                .fill(Color.primary.opacity(0.09))
-                .frame(height: 1)
+    private func errorNotice(_ message: String) -> some View {
+        Label {
+            Text(message)
+                .fixedSize(horizontal: false, vertical: true)
+        } icon: {
+            Image(systemName: "exclamationmark.circle.fill")
+                .foregroundStyle(FTCBrand.accentText)
+        }
+        .font(.footnote)
+        .foregroundStyle(.primary)
+        .padding(13)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color(uiColor: .secondarySystemGroupedBackground),
+                    in: RoundedRectangle(cornerRadius: 13, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 13, style: .continuous)
+                .stroke(FTCBrand.accentText.opacity(0.25), lineWidth: 1)
+        }
+        .accessibilityElement(children: .combine)
+    }
+
+    private var primaryAction: some View {
+        Button(action: submit) {
             HStack {
-                Text("WILD CIRCUITS")
-                    .font(.system(size: 9, weight: .bold, design: .monospaced))
-                    .tracking(1)
+                Text(isSigningUp ? "Create account" : "Sign in")
+                    .font(.system(.body, design: .rounded, weight: .semibold))
                 Spacer()
-                Text("NEW JERSEY  ·  EST. 2026")
-                    .font(.system(size: 9, weight: .medium, design: .monospaced))
-                    .tracking(0.3)
+                Image(systemName: "arrow.right")
+                    .font(.subheadline.weight(.semibold))
             }
-            .foregroundStyle(.tertiary)
+            .foregroundStyle(.white)
+            .padding(.horizontal, 18)
+            .frame(height: 56)
+            .background(FTCBrand.orange, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        }
+        .buttonStyle(PressableButtonStyle())
+        .disabled(!isValid)
+        .opacity(isValid ? 1 : 0.52)
+        .accessibilityHint(isValid ? "" : "Enter a valid email and password to continue")
+    }
+
+    private var modeAction: some View {
+        HStack(spacing: 4) {
+            Text(isSigningUp ? "Already have an account?" : "New to the team?")
+                .foregroundStyle(.secondary)
+            Button(isSigningUp ? "Sign in" : "Create an account") {
+                authManager.errorMessage = nil
+                focusedField = nil
+                mode = isSigningUp ? .signIn : .signUp
+            }
+            .fontWeight(.semibold)
+            .foregroundStyle(FTCBrand.accentText)
+        }
+        .font(.subheadline)
+        .frame(maxWidth: .infinity)
+    }
+
+    private var privacyNote: some View {
+        VStack(spacing: 11) {
+            Rectangle()
+                .fill(FTCBrand.line)
+                .frame(height: 1)
+            Label("Your account is stored on this iPhone.", systemImage: "iphone")
+                .font(.caption)
+                .foregroundStyle(.secondary)
             Text("Team data stays on this device unless cloud sync is enabled.")
                 .font(.caption2)
                 .foregroundStyle(.tertiary)
+                .multilineTextAlignment(.center)
         }
-        .padding(.top, 19)
-    }
-
-    private var isValid: Bool {
-        guard email.contains("@"), password.count >= 4 else { return false }
-        return mode == .signIn || !name.trimmingCharacters(in: .whitespaces).isEmpty
+        .frame(maxWidth: .infinity)
     }
 
     private func submit() {
+        guard isValid else { return }
+        focusedField = nil
         UIImpactFeedbackGenerator(style: .medium).impactOccurred()
         switch mode {
         case .signIn:
-            authManager.signIn(email: email.trimmingCharacters(in: .whitespacesAndNewlines),
-                               password: password)
+            authManager.signIn(
+                email: email.trimmingCharacters(in: .whitespacesAndNewlines),
+                password: password
+            )
         case .signUp:
-            authManager.signUp(name: name, email: email, password: password,
-                               role: role, avatarColor: avatarColor)
+            authManager.signUp(
+                name: name.trimmingCharacters(in: .whitespacesAndNewlines),
+                email: email.trimmingCharacters(in: .whitespacesAndNewlines),
+                password: password,
+                role: role,
+                avatarColor: avatarColor
+            )
         }
     }
 }
