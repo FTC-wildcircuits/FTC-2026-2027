@@ -364,6 +364,7 @@ private struct FTCEventDetailSheet: View {
                 VStack(alignment: .leading, spacing: 20) {
                     eventHero
                     locationCard
+                    EventReadinessBoard(event: event)
                     meetingNotebook
                 }
                 .padding(18)
@@ -512,6 +513,114 @@ private struct FTCEventDetailSheet: View {
                 }
             }
         }
+    }
+}
+
+private struct EventReadinessBoard: View {
+    let event: FTCEvent
+    @AppStorage("eventReadiness.completedItems") private var completedRaw = ""
+
+    private let tasks = [
+        "Confirm team attendance & rides",
+        "Run a full robot inspection",
+        "Test robot code and driver controls",
+        "Charge and label all batteries",
+        "Pack tools, pit kit, and spare parts",
+        "Pack Driver Hub, Control Hub, and chargers",
+        "Bring engineering notebook and inspection docs",
+        "Save a backup of the competition code"
+    ]
+
+    private var completedItems: Set<String> {
+        Set(completedRaw.split(separator: "\n").map(String.init))
+    }
+
+    private var eventItems: [String] {
+        tasks.map { "\(event.id)::\($0)" }
+    }
+
+    private var completedCount: Int {
+        eventItems.filter { completedItems.contains($0) }.count
+    }
+
+    private var progress: Double {
+        Double(completedCount) / Double(tasks.count)
+    }
+
+    var body: some View {
+        FTCBrandCard {
+            VStack(alignment: .leading, spacing: 15) {
+                HStack(alignment: .top) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Label("EVENT READY", systemImage: "checkmark.shield.fill")
+                            .font(.system(.caption2, design: .rounded, weight: .black))
+                            .tracking(1)
+                            .foregroundStyle(FTCBrand.cyan)
+                        Text("Pit crew checklist")
+                            .font(.system(.title3, design: .rounded, weight: .bold))
+                            .foregroundStyle(.white)
+                    }
+                    Spacer()
+                    Text("\(completedCount)/\(tasks.count)")
+                        .font(.system(.title3, design: .rounded, weight: .bold).monospacedDigit())
+                        .foregroundStyle(completedCount == tasks.count ? FTCBrand.cyan : .white.opacity(0.72))
+                        .contentTransition(.numericText())
+                }
+
+                ProgressView(value: progress)
+                    .tint(completedCount == tasks.count ? FTCBrand.cyan : FTCBrand.blue)
+                    .animation(.spring(response: 0.35), value: completedCount)
+
+                VStack(spacing: 2) {
+                    ForEach(tasks, id: \.self) { task in
+                        readinessRow(task)
+                    }
+                }
+
+                if completedCount == tasks.count {
+                    Label("Pit-ready. Go make it count.", systemImage: "sparkles")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(FTCBrand.cyan)
+                        .frame(maxWidth: .infinity, alignment: .center)
+                        .padding(.top, 3)
+                        .transition(.scale.combined(with: .opacity))
+                }
+            }
+        }
+        .animation(.spring(response: 0.32, dampingFraction: 0.8), value: completedCount == tasks.count)
+    }
+
+    private func readinessRow(_ task: String) -> some View {
+        let key = "\(event.id)::\(task)"
+        let isComplete = completedItems.contains(key)
+        return Button {
+            var updated = completedItems
+            if isComplete {
+                updated.remove(key)
+            } else {
+                updated.insert(key)
+            }
+            completedRaw = updated.sorted().joined(separator: "\n")
+        } label: {
+            HStack(spacing: 12) {
+                Image(systemName: isComplete ? "checkmark.circle.fill" : "circle")
+                    .font(.system(size: 19, weight: .medium))
+                    .foregroundStyle(isComplete ? FTCBrand.cyan : .white.opacity(0.34))
+                    .contentTransition(.symbolEffect(.replace))
+                Text(task)
+                    .font(.subheadline)
+                    .foregroundStyle(isComplete ? .white.opacity(0.48) : .white.opacity(0.88))
+                    .strikethrough(isComplete, color: .white.opacity(0.34))
+                    .multilineTextAlignment(.leading)
+                Spacer(minLength: 0)
+            }
+            .frame(minHeight: 42)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(task)
+        .accessibilityAddTraits(isComplete ? .isSelected : [])
+        .accessibilityHint(isComplete ? "Mark as not done" : "Mark as done")
     }
 }
 

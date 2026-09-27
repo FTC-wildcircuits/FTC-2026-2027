@@ -75,7 +75,10 @@ scouting with event filters/team averages/CSV export, FTCScout team and event
 data, scoring simulator, real-time chat, team settings, and budget/sponsor
 tracking. The clean-slate build clears local team records once on first
 launch, starts with cloud sync off, and includes an in-app 2026–27 calendar
-for the five supplied events with a linked meeting notebook for each.
+for the five supplied events with a linked engineering notebook and
+persistent robot/pit readiness checklist for each. The login screen has a
+custom team identity, animated SwiftUI loading mark, and password visibility
+controls.
 Enabling cloud sync is optional and may download existing shared records;
 it also uploads local records from this device. The reset does not delete
 Firestore data. FTCScout match scores are not fabricated: scores in scouting
