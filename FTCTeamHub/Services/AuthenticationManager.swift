@@ -38,10 +38,10 @@ final class AuthenticationManager {
         if let user = try? modelContext.fetch(descriptor).first {
             currentUser = user
         }
+    }
 
-        func setSyncService(_ service: FirebaseSyncService?) {
-            syncService = service
-        }
+    func setSyncService(_ service: FirebaseSyncService?) {
+        syncService = service
     }
 
     func signUp(name: String, email: String, password: String, role: TeamRole, avatarColor: AvatarColor) {
