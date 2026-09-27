@@ -2,9 +2,8 @@
 //  PreviewSupport.swift
 //  FTCTeamHub
 //
-//  NEW: schema includes ScoringElement, with sample point values filled
-//  in (unlike the real app's zeroed defaults) so the Scoring Simulator
-//  preview looks realistic.
+//  Sample data and a preconfigured model container for SwiftUI
+//  previews, including realistic Scoring Simulator point values.
 //
 
 import Foundation
@@ -17,7 +16,7 @@ func makePreviewContainer() -> ModelContainer {
         TestRunRecord.self, Idea.self, ActivityEvent.self, TrackedTeam.self,
         Battery.self, ChecklistRun.self, InventoryItem.self,
         TeamSettings.self, Sponsor.self, BudgetExpense.self,
-        ScoringElement.self
+        ScoringElement.self, ScoutingReport.self
     ])
     let config = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
     let container = try! ModelContainer(for: schema, configurations: [config])

@@ -2,12 +2,8 @@
 //  TasksTabView.swift
 //  FTCTeamHub
 //
-//  NEW: added a "Calendar" view mode — a week-strip agenda (not a full
-//  month grid, to keep the date math simple and reliable) showing which
-//  days have deadlines, with the day's tasks listed below. Covers
-//  "organize meeting schedules, project deadlines, and portfolio
-//  milestone logs" by tagging tasks with dates the same way as any other
-//  deadline.
+//  Team task board with list and week-agenda calendar views, grouped
+//  by deadline.
 //
 
 import SwiftUI

@@ -2,9 +2,8 @@
 //  TestingTabView.swift
 //  FTCTeamHub
 //
-//  NEW: Analytics section now has a CSV export button producing a
-//  spreadsheet-ready file of every logged test run, for deeper analysis
-//  in Excel/Sheets than the in-app charts allow.
+//  Logs practice test runs and charts trends over time, with CSV
+//  export for deeper analysis outside the app.
 //
 
 import SwiftUI

@@ -2,11 +2,9 @@
 //  NotificationScheduler.swift
 //  FTCTeamHub
 //
-//  Local (on-device) notifications for task deadlines. Deliberately local
-//  rather than push-based — no server infrastructure needed, and push
-//  notifications require a paid Apple Developer Program capability
-//  (same restriction hit with CloudKit) which this free-Apple-ID
-//  sideloaded app doesn't have. Local notifications have no such restriction.
+//  Schedules local, on-device notifications for task deadlines. Local
+//  rather than push-based, so no server infrastructure or paid Apple
+//  Developer Program capability is required.
 //
 
 import Foundation
@@ -44,5 +42,11 @@ enum NotificationScheduler {
     /// doesn't fire for a task that's already done.
     static func cancelReminder(for task: TaskItem) {
         UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: [task.id.uuidString])
+    }
+
+    static func cancelAllReminders() {
+        let center = UNUserNotificationCenter.current()
+        center.removeAllPendingNotificationRequests()
+        center.removeAllDeliveredNotifications()
     }
 }

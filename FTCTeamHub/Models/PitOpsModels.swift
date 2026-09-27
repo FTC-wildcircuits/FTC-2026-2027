@@ -3,10 +3,7 @@
 //  FTCTeamHub
 //
 //  Data models for the Pit Ops tab: battery cycle tracking, pre/post
-//  flight + robot inspection checklists, and parts/tools inventory with
-//  QR labels. This file was missing from the repo, which is why
-//  ChecklistType/Battery/ChecklistRun/InventoryItem/ChecklistItemResult
-//  were all "cannot find in scope" across multiple other files.
+//  inspection checklists, and QR-labeled parts/tools inventory.
 //
 
 import Foundation
@@ -152,11 +149,26 @@ final class InventoryItem {
     var isCheckedOut: Bool
     var checkedOutByName: String
     var notes: String
+    var lowStockThresholdValue: Int?
+    var needsMaintenanceValue: Bool?
     var addedAt: Date
+
+    var lowStockThreshold: Int {
+        get { max(lowStockThresholdValue ?? 1, 0) }
+        set { lowStockThresholdValue = max(newValue, 0) }
+    }
+
+    var needsMaintenance: Bool {
+        get { needsMaintenanceValue ?? false }
+        set { needsMaintenanceValue = newValue }
+    }
+
+    var isLowStock: Bool { quantity <= lowStockThreshold }
 
     init(id: UUID = UUID(), name: String, category: String, binLocation: String,
          quantity: Int = 1, isCheckedOut: Bool = false, checkedOutByName: String = "",
-         notes: String = "", addedAt: Date = .now) {
+         notes: String = "", lowStockThreshold: Int = 1, needsMaintenance: Bool = false,
+         addedAt: Date = .now) {
         self.id = id
         self.name = name
         self.category = category
@@ -165,6 +177,8 @@ final class InventoryItem {
         self.isCheckedOut = isCheckedOut
         self.checkedOutByName = checkedOutByName
         self.notes = notes
+        self.lowStockThresholdValue = lowStockThreshold
+        self.needsMaintenanceValue = needsMaintenance
         self.addedAt = addedAt
     }
 

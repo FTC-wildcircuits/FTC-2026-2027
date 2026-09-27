@@ -2,10 +2,8 @@
 //  NotebookTabView.swift
 //  FTCTeamHub
 //
-//  NEW: added a full-notebook PDF export (toolbar button on the main
-//  list) that combines every entry into one multi-page PDF — the actual
-//  artifact you'd hand to Inspire Award judges, rather than exporting
-//  one entry at a time.
+//  Engineering notebook entries, tagged and searchable, with export to
+//  a single combined PDF for award judging.
 //
 
 import SwiftUI
@@ -19,19 +17,46 @@ struct NotebookTabView: View {
     @State private var isPresentingTemplatePicker = false
     @State private var selectedTemplate: NotebookTemplate?
     @State private var fullExportURL: URL?
+    @State private var searchText = ""
+    @State private var selectedTag: String?
+    @State private var oldestFirst = false
+
+    private var availableTags: [String] {
+        Array(Set(entries.flatMap(\.tags))).sorted { $0.localizedStandardCompare($1) == .orderedAscending }
+    }
+
+    private var visibleEntries: [NotebookEntry] {
+        entries.filter { entry in
+            let matchesTag = selectedTag.map { entry.tags.contains($0) } ?? true
+            let matchesSearch = searchText.isEmpty ||
+                entry.title.localizedCaseInsensitiveContains(searchText) ||
+                entry.content.localizedCaseInsensitiveContains(searchText) ||
+                entry.authorName.localizedCaseInsensitiveContains(searchText) ||
+                entry.tags.contains { $0.localizedCaseInsensitiveContains(searchText) }
+            return matchesTag && matchesSearch
+        }
+        .sorted { oldestFirst ? $0.timestamp < $1.timestamp : $0.timestamp > $1.timestamp }
+    }
 
     var body: some View {
         NavigationStack {
             List {
-                ForEach(entries) { entry in
-                    NavigationLink(value: entry) {
-                        NotebookRow(entry: entry)
+                if visibleEntries.isEmpty && !entries.isEmpty {
+                    ContentUnavailableView("No matching entries", systemImage: "magnifyingglass",
+                                           description: Text("Change the search or tag filter to see notebook entries."))
+                        .listRowSeparator(.hidden)
+                } else {
+                    ForEach(visibleEntries) { entry in
+                        NavigationLink(value: entry) {
+                            NotebookRow(entry: entry)
+                        }
                     }
+                    .onDelete(perform: deleteEntries)
                 }
-                .onDelete(perform: deleteEntries)
             }
             .listStyle(.plain)
             .navigationTitle("Notebook")
+            .searchable(text: $searchText, prompt: "Search notes, tags, or authors")
             .navigationDestination(for: NotebookEntry.self) { entry in
                 NotebookEntryDetailView(entry: entry)
             }
@@ -46,6 +71,31 @@ struct NotebookTabView: View {
                         Label("Export Full Notebook", systemImage: "square.and.arrow.up.on.square")
                     }
                     .disabled(entries.isEmpty)
+                }
+                ToolbarItem(placement: .secondaryAction) {
+                    Menu {
+                        Button("All tags") { selectedTag = nil }
+                        if !availableTags.isEmpty {
+                            Divider()
+                            ForEach(availableTags, id: \.self) { tag in
+                                Button {
+                                    selectedTag = tag
+                                } label: {
+                                    if selectedTag == tag {
+                                        Label(tag, systemImage: "checkmark")
+                                    } else {
+                                        Text(tag)
+                                    }
+                                }
+                            }
+                        }
+                        Divider()
+                        Button(oldestFirst ? "Newest first" : "Oldest first") {
+                            oldestFirst.toggle()
+                        }
+                    } label: {
+                        Label("Organize", systemImage: "line.3.horizontal.decrease")
+                    }
                 }
             }
             .confirmationDialog("New Entry", isPresented: $isPresentingTemplatePicker, titleVisibility: .visible) {
@@ -73,7 +123,7 @@ struct NotebookTabView: View {
 
     private func deleteEntries(at offsets: IndexSet) {
         for index in offsets {
-            let entry = entries[index]
+            let entry = visibleEntries[index]
             syncService?.deleteNotebookEntry(id: entry.id)
             context.delete(entry)
         }
@@ -89,7 +139,15 @@ private struct NotebookRow: View {
             Text(entry.content)
                 .font(.caption).foregroundStyle(.secondary).lineLimit(2)
             HStack {
-                Text(entry.authorName).font(.caption2).foregroundStyle(.tertiary)
+                Text(entry.authorName)
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+                if !entry.tags.isEmpty {
+                    Text("· " + entry.tags.joined(separator: " · "))
+                        .font(.caption2)
+                        .foregroundStyle(.tint)
+                        .lineLimit(1)
+                }
                 Spacer()
                 Text(entry.timestamp, style: .date).font(.caption2).foregroundStyle(.tertiary)
             }
@@ -387,7 +445,8 @@ private struct NewNotebookEntrySheet: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") { save() }.disabled(title.isEmpty)
+                    Button("Save") { save() }
+                        .disabled(title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 }
             }
         }
@@ -430,10 +489,13 @@ private struct NewNotebookEntrySheet: View {
 
     private func save() {
         guard let currentUser = authManager.currentUser else { return }
-        let tags = tagsInput.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
+        let tags = Array(Set(tagsInput.split(separator: ",")
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }))
 
         let entry = NotebookEntry(authorID: currentUser.id, authorName: currentUser.name,
-                                   title: title, content: content, tags: tags)
+                                   title: title.trimmingCharacters(in: .whitespacesAndNewlines),
+                                   content: content, tags: tags.sorted())
 
         switch template {
         case .autonomousTest:
@@ -546,16 +608,19 @@ private struct EditNotebookEntrySheet: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") { save() }.disabled(title.isEmpty)
+                    Button("Save") { save() }
+                        .disabled(title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 }
             }
         }
     }
 
     private func save() {
-        entry.title = title
+        entry.title = title.trimmingCharacters(in: .whitespacesAndNewlines)
         entry.content = content
-        entry.tags = tagsInput.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
+        entry.tags = Array(Set(tagsInput.split(separator: ",")
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty })).sorted()
 
         if entry.autonomousLog != nil {
             entry.autonomousLog = AutonomousTestLog(routineName: autoRoutineName, startingPosition: autoStartingPosition,

@@ -2,11 +2,9 @@
 //  QRScannerView.swift
 //  FTCTeamHub
 //
-//  Dedicated camera-based check-in/check-out flow: scan an inventory
-//  item's printed QR label (generated in the Inventory detail view) and
-//  immediately toggle its checked-out state, logged to the Activity feed.
-//  Uses VisionKit's DataScannerViewController (iOS 16+) — no third-party
-//  scanning library needed, and no manual AVCaptureSession plumbing.
+//  Camera-based check-in/check-out flow: scan an inventory item's
+//  printed QR label to toggle its checked-out state, logged to the
+//  activity feed. Built on VisionKit's DataScannerViewController.
 //
 
 import SwiftUI
@@ -111,9 +109,12 @@ struct QRCheckInOutView: View {
                     Text(item.name).font(.headline)
                     Text("\(item.category) · Bin \(item.binLocation)")
                         .font(.caption).foregroundStyle(.secondary)
-                    Text(item.isCheckedOut ? "Currently checked out" : "Currently in storage")
+                    Text(item.needsMaintenance ? "Needs maintenance" :
+                         item.quantity == 0 ? "Out of stock" :
+                         item.isCheckedOut ? "Currently checked out" : "Currently in storage")
                         .font(.caption2)
-                        .foregroundStyle(item.isCheckedOut ? .orange : .green)
+                        .foregroundStyle(item.needsMaintenance || item.quantity == 0 ? .red :
+                                         item.isCheckedOut ? .orange : .green)
 
                     Button {
                         toggleCheckout(item)
@@ -123,6 +124,7 @@ struct QRCheckInOutView: View {
                             .frame(maxWidth: .infinity)
                     }
                     .buttonStyle(.borderedProminent)
+                    .disabled(!item.isCheckedOut && (item.quantity == 0 || item.needsMaintenance))
 
                     Button("Scan Another") { scannedItem = nil }
                         .buttonStyle(.bordered)
@@ -152,6 +154,7 @@ struct QRCheckInOutView: View {
 
     private func toggleCheckout(_ item: InventoryItem) {
         guard let user = authManager.currentUser else { return }
+        guard item.isCheckedOut || (item.quantity > 0 && !item.needsMaintenance) else { return }
         UIImpactFeedbackGenerator(style: .medium).impactOccurred()
         item.isCheckedOut.toggle()
         item.checkedOutByName = item.isCheckedOut ? user.name : ""

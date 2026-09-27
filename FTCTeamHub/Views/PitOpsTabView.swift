@@ -2,12 +2,8 @@
 //  PitOpsTabView.swift
 //  FTCTeamHub
 //
-//  FIX: `ForEach(ChecklistType.allCases, id: \.self)` caused an overload
-//  ambiguity error because ChecklistType already conforms to Identifiable
-//  (see the extension below) — explicitly passing `id: \.self` alongside
-//  that conformance confused the compiler into trying to match the
-//  Binding<C>-based ForEach initializer instead of the plain collection
-//  one. Fix: drop `id: \.self` entirely and let it use Identifiable.
+//  Battery cycle tracking, inspection checklists, and QR-labeled
+//  parts/tools inventory for the pit crew.
 //
 
 import SwiftUI
@@ -16,6 +12,7 @@ import CoreImage.CIFilterBuiltins
 import UIKit
 
 struct PitOpsTabView: View {
+    @Environment(TabRouter.self) private var router
     @State private var section: Section = .batteries
 
     enum Section: String, CaseIterable, Identifiable {
@@ -41,6 +38,13 @@ struct PitOpsTabView: View {
                 }
             }
             .navigationTitle("Pit Ops")
+            .onChange(of: router.selection) {
+                if router.selection == .inventory {
+                    section = .inventory
+                } else if router.selection == .pitOps {
+                    section = .batteries
+                }
+            }
         }
     }
 }
@@ -327,20 +331,68 @@ private struct InventoryListView: View {
     @Query(sort: \InventoryItem.name) private var items: [InventoryItem]
     @State private var isPresentingNewItem = false
     @State private var isPresentingScanner = false
+    @State private var searchText = ""
+    @State private var filter: Filter = .all
+
+    private enum Filter: String, CaseIterable, Identifiable {
+        case all = "All items"
+        case lowStock = "Low stock"
+        case maintenance = "Maintenance"
+        case checkedOut = "Checked out"
+        var id: String { rawValue }
+    }
+
+    private var visibleItems: [InventoryItem] {
+        items.filter { item in
+            let matchesSearch = searchText.isEmpty ||
+                item.name.localizedCaseInsensitiveContains(searchText) ||
+                item.category.localizedCaseInsensitiveContains(searchText) ||
+                item.binLocation.localizedCaseInsensitiveContains(searchText) ||
+                item.notes.localizedCaseInsensitiveContains(searchText) ||
+                item.checkedOutByName.localizedCaseInsensitiveContains(searchText)
+            let matchesFilter: Bool
+            switch filter {
+            case .all: matchesFilter = true
+            case .lowStock: matchesFilter = item.isLowStock
+            case .maintenance: matchesFilter = item.needsMaintenance
+            case .checkedOut: matchesFilter = item.isCheckedOut
+            }
+            return matchesSearch && matchesFilter
+        }
+    }
+
+    private var lowStockCount: Int { items.filter { $0.isLowStock }.count }
+    private var maintenanceCount: Int { items.filter { $0.needsMaintenance }.count }
 
     var body: some View {
         List {
             if items.isEmpty {
                 EmptyStateView(icon: "shippingbox", title: "No items tracked",
-                               subtitle: "Log expensive or easy-to-lose parts here.",
+                               subtitle: "Track quantities, storage locations, low stock, and maintenance.",
                                tint: .orange, actionTitle: "Add Item") { isPresentingNewItem = true }
                     .listRowSeparator(.hidden)
+            } else {
+                Section {
+                    HStack(spacing: 14) {
+                        Label("\(lowStockCount) low", systemImage: "exclamationmark.triangle.fill")
+                            .foregroundStyle(lowStockCount == 0 ? Color.gray : Color.orange)
+                        Label("\(maintenanceCount) repair", systemImage: "wrench.and.screwdriver.fill")
+                            .foregroundStyle(maintenanceCount == 0 ? Color.gray : Color.red)
+                    }
+                    .font(.caption.weight(.medium))
+                }
             }
-            ForEach(items) { item in
-                NavigationLink {
-                    InventoryDetailView(item: item)
-                } label: {
-                    InventoryRow(item: item)
+            if !items.isEmpty && visibleItems.isEmpty {
+                ContentUnavailableView("No matching items", systemImage: "magnifyingglass",
+                                       description: Text("Change the search or inventory filter."))
+                    .listRowSeparator(.hidden)
+            } else {
+                ForEach(visibleItems) { item in
+                    NavigationLink {
+                        InventoryDetailView(item: item)
+                    } label: {
+                        InventoryRow(item: item)
+                    }
                 }
             }
             Section {
@@ -350,7 +402,25 @@ private struct InventoryListView: View {
             }
         }
         .listStyle(.insetGrouped)
+        .searchable(text: $searchText, prompt: "Search parts, categories, bins")
         .toolbar {
+            ToolbarItem(placement: .secondaryAction) {
+                Menu {
+                    ForEach(Filter.allCases) { option in
+                        Button {
+                            filter = option
+                        } label: {
+                            if filter == option {
+                                Label(option.rawValue, systemImage: "checkmark")
+                            } else {
+                                Text(option.rawValue)
+                            }
+                        }
+                    }
+                } label: {
+                    Label(filter.rawValue, systemImage: "line.3.horizontal.decrease")
+                }
+            }
             ToolbarItem(placement: .primaryAction) {
                 Button { isPresentingScanner = true } label: {
                     Label("Scan", systemImage: "qrcode.viewfinder")
@@ -369,7 +439,19 @@ private struct InventoryRow: View {
         HStack {
             VStack(alignment: .leading, spacing: 2) {
                 Text(item.name).font(.body.weight(.medium))
-                Text("\(item.category) · Bin \(item.binLocation)").font(.caption).foregroundStyle(.secondary)
+                Text("\(item.category) · \(item.binLocation.isEmpty ? "No bin" : "Bin \(item.binLocation)")")
+                    .font(.caption).foregroundStyle(.secondary)
+                HStack(spacing: 6) {
+                    Text("Qty \(item.quantity)")
+                        .foregroundStyle(item.isLowStock ? .orange : .secondary)
+                    if item.isLowStock {
+                        Text("Low stock").foregroundStyle(.orange)
+                    }
+                    if item.needsMaintenance {
+                        Text("Maintenance").foregroundStyle(.red)
+                    }
+                }
+                .font(.caption2.weight(.medium))
             }
             Spacer()
             if item.isCheckedOut {
@@ -389,14 +471,32 @@ private struct InventoryDetailView: View {
     @Environment(\.modelContext) private var context
     @Environment(\.syncService) private var syncService
     @Environment(AuthenticationManager.self) private var authManager
+    @State private var isPresentingEdit = false
 
     var body: some View {
         List {
             Section("Details") {
                 LabeledContent("Category", value: item.category)
-                LabeledContent("Bin location", value: item.binLocation)
+                LabeledContent("Bin location", value: item.binLocation.isEmpty ? "Not set" : item.binLocation)
                 LabeledContent("Quantity", value: "\(item.quantity)")
+                LabeledContent("Low stock alert at", value: "\(item.lowStockThreshold) or fewer")
+                LabeledContent("Status", value: statusDescription)
                 if !item.notes.isEmpty { LabeledContent("Notes", value: item.notes) }
+            }
+
+            Section {
+                Button {
+                    isPresentingEdit = true
+                } label: {
+                    Label("Edit item details", systemImage: "pencil")
+                }
+                Button {
+                    item.needsMaintenance.toggle()
+                    syncService?.pushInventoryItem(item)
+                } label: {
+                    Label(item.needsMaintenance ? "Mark maintenance complete" : "Flag for maintenance",
+                          systemImage: item.needsMaintenance ? "checkmark.circle" : "wrench.and.screwdriver")
+                }
             }
 
             Section("QR Label") {
@@ -421,9 +521,19 @@ private struct InventoryDetailView: View {
                 } label: {
                     Label(item.isCheckedOut ? "Check In" : "Check Out", systemImage: item.isCheckedOut ? "arrow.uturn.down" : "arrow.up.right")
                 }
+                .disabled(!item.isCheckedOut && (item.quantity == 0 || item.needsMaintenance))
             }
         }
         .navigationTitle(item.name)
+        .sheet(isPresented: $isPresentingEdit) {
+            NewInventoryItemSheet(item: item)
+        }
+    }
+
+    private var statusDescription: String {
+        if item.needsMaintenance { return "Needs maintenance" }
+        if item.isCheckedOut { return "Checked out by \(item.checkedOutByName)" }
+        return item.isLowStock ? "Low stock" : "Available"
     }
 
     private func toggleCheckout() {
@@ -441,14 +551,28 @@ private struct InventoryDetailView: View {
 }
 
 private struct NewInventoryItemSheet: View {
+    let item: InventoryItem?
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var context
     @Environment(\.syncService) private var syncService
-    @State private var name = ""
-    @State private var category = ""
-    @State private var binLocation = ""
-    @State private var quantity = 1
-    @State private var notes = ""
+    @State private var name: String
+    @State private var category: String
+    @State private var binLocation: String
+    @State private var quantity: Int
+    @State private var lowStockThreshold: Int
+    @State private var needsMaintenance: Bool
+    @State private var notes: String
+
+    init(item: InventoryItem? = nil) {
+        self.item = item
+        _name = State(initialValue: item?.name ?? "")
+        _category = State(initialValue: item?.category ?? "")
+        _binLocation = State(initialValue: item?.binLocation ?? "")
+        _quantity = State(initialValue: item?.quantity ?? 1)
+        _lowStockThreshold = State(initialValue: item?.lowStockThreshold ?? 1)
+        _needsMaintenance = State(initialValue: item?.needsMaintenance ?? false)
+        _notes = State(initialValue: item?.notes ?? "")
+    }
 
     var body: some View {
         NavigationStack {
@@ -456,24 +580,45 @@ private struct NewInventoryItemSheet: View {
                 TextField("Name", text: $name)
                 TextField("Category (e.g. Electronics)", text: $category)
                 TextField("Bin location (e.g. Shelf 2, Bin B)", text: $binLocation)
-                Stepper("Quantity: \(quantity)", value: $quantity, in: 1...100)
+                Stepper("Quantity: \(quantity)", value: $quantity, in: 0...1000)
+                Stepper("Low stock alert at: \(lowStockThreshold)", value: $lowStockThreshold, in: 0...1000)
+                Toggle("Needs maintenance", isOn: $needsMaintenance)
                 TextField("Notes", text: $notes, axis: .vertical)
             }
-            .navigationTitle("New Item")
+            .navigationTitle(item == nil ? "New Item" : "Edit Item")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") { save() }.disabled(name.isEmpty)
+                    Button("Save") { save() }
+                        .disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 }
             }
         }
     }
 
     private func save() {
-        let item = InventoryItem(name: name, category: category.isEmpty ? "Uncategorized" : category,
-                                  binLocation: binLocation, quantity: quantity, notes: notes)
-        context.insert(item)
-        syncService?.pushInventoryItem(item)
+        let cleanName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        let cleanCategory = category.trimmingCharacters(in: .whitespacesAndNewlines)
+        let cleanBin = binLocation.trimmingCharacters(in: .whitespacesAndNewlines)
+        let inventoryItem: InventoryItem
+        if let item {
+            inventoryItem = item
+            item.name = cleanName
+            item.category = cleanCategory.isEmpty ? "Uncategorized" : cleanCategory
+            item.binLocation = cleanBin
+            item.quantity = quantity
+            item.lowStockThreshold = lowStockThreshold
+            item.needsMaintenance = needsMaintenance
+            item.notes = notes
+        } else {
+            inventoryItem = InventoryItem(
+                name: cleanName, category: cleanCategory.isEmpty ? "Uncategorized" : cleanCategory,
+                binLocation: cleanBin, quantity: quantity, notes: notes,
+                lowStockThreshold: lowStockThreshold, needsMaintenance: needsMaintenance
+            )
+            context.insert(inventoryItem)
+        }
+        syncService?.pushInventoryItem(inventoryItem)
         dismiss()
     }
 }
@@ -496,7 +641,9 @@ enum QRCodeGenerator {
 #Preview {
     let container = makePreviewContainer()
     let authManager = AuthenticationManager(modelContext: container.mainContext)
+    let router = TabRouter()
     return PitOpsTabView()
         .modelContainer(container)
         .environment(authManager)
+        .environment(router)
 }

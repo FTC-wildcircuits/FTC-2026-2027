@@ -2,12 +2,9 @@
 //  InsightsEngine.swift
 //  FTCTeamHub
 //
-//  "AI-style" local feedback — but built honestly: this is rule-based
-//  trend analysis over your own logged data, computed entirely on-device
-//  with no network call and no actual language model. Framed as
-//  "Insights" rather than "AI" in the UI for that reason. It still gives
-//  genuinely useful, automatically-generated coaching-style observations
-//  a rookie team wouldn't necessarily think to check for themselves.
+//  On-device, rule-based trend analysis over logged practice data —
+//  no network call and no language model, which is why the UI calls
+//  these "Insights" rather than "AI."
 //
 
 import Foundation

@@ -2,11 +2,10 @@
 //  TrackedTeam.swift
 //  FTCTeamHub
 //
-//  A locally-saved bookmark pointing at a real FTC team (usually an
-//  upcoming opponent or alliance partner), so the team doesn't have to
-//  re-search the same team number every time before an event. This is
-//  separate from `AppUser` — it represents an EXTERNAL team, not a member
-//  of your own roster.
+//  A locally saved bookmark pointing at a real FTC team — usually an
+//  upcoming opponent or alliance partner — so members don't have to
+//  re-search the same number before an event. Represents an external
+//  team, distinct from `AppUser`, which models your own roster.
 //
 
 import Foundation

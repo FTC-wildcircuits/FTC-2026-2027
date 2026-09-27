@@ -2,13 +2,11 @@
 //  ScoringModels.swift
 //  FTCTeamHub
 //
-//  Backing model for the Scoring Simulator. Deliberately fully
-//  user-configurable rather than hardcoded: as of this build, the
-//  2026-2027 "BIOBUZZ" season kicks off TODAY and official point values
-//  aren't published yet. Hardcoding guessed numbers would actively
-//  mislead alliance-selection strategy, so instead the team edits these
-//  once the real Game Manual is released, and the calculator works
-//  correctly for every future season without needing an app update.
+//  Backing model for the Scoring Simulator. Point values are fully
+//  user-configurable rather than hardcoded, since official numbers
+//  change every season — teams enter their own once the current Game
+//  Manual is released, and the calculator keeps working for future
+//  seasons without an app update.
 //
 
 import Foundation

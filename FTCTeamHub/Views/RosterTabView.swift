@@ -2,10 +2,8 @@
 //  RosterTabView.swift
 //  FTCTeamHub
 //
-//  TAB 1 — Team Base & Roster. The command-center view of every team
-//  member: role badge, avatar, whether they're the currently signed-in
-//  user, and their most recent contribution pulled from the shared
-//  activity feed.
+//  The team roster: role badges, avatars, and each member's most
+//  recent contribution from the shared activity feed.
 //
 
 import SwiftUI

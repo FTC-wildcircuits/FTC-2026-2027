@@ -2,8 +2,8 @@
 //  IdeasTabView.swift
 //  FTCTeamHub
 //
-//  NEW: posting/upvoting/commenting/promoting now calls syncService?.pushIdea(...)
-//  so ideas actually sync across devices.
+//  A shared idea board: post, upvote, comment, and promote ideas to
+//  tasks, synced across the team via Firestore.
 //
 
 import SwiftUI

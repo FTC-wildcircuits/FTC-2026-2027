@@ -2,16 +2,10 @@
 //  KeychainService.swift
 //  FTCTeamHub
 //
-//  Minimal Keychain wrapper used to persist the logged-in user's session
-//  across app launches — this is exactly what was MISSING in the previous
-//  version, which is why the app appeared to "kick you out": the sign-in
-//  state lived only in an in-memory @Published var with no persistence at
-//  all, so restarting the app (or SwiftUI simply re-rendering the root
-//  view) reset it back to the login screen every time.
-//
-//  Storing just a UUID string (the session's user id) in the Keychain
-//  is enough: on launch, AuthenticationManager reads this value and looks
-//  up the matching AppUser from SwiftData to restore the full session.
+//  Minimal Keychain wrapper that persists the signed-in user's session
+//  across app launches. Stores the session's user ID; on launch,
+//  AuthenticationManager reads it back and looks up the matching
+//  AppUser from SwiftData to restore the full session.
 //
 
 import Foundation

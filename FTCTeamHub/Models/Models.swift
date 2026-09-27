@@ -2,12 +2,8 @@
 //  Models.swift
 //  FTCTeamHub
 //
-//  Core SwiftData models. See PitOpsModels.swift for Battery, ChecklistRun,
-//  and InventoryItem (added separately to keep this file from ballooning).
-//
-//  CHANGE: TestRunRecord gained `batteryLabel: String?` so practice runs
-//  can be tagged with which battery was in the robot, letting the Pit Ops
-//  tab flag a specific battery as underperforming over time.
+//  Core SwiftData models. See PitOpsModels.swift for Battery,
+//  ChecklistRun, and InventoryItem.
 //
 
 import Foundation

@@ -2,12 +2,9 @@
 //  EmptyStateView.swift
 //  FTCTeamHub
 //
-//  A more polished empty state than SwiftUI's default ContentUnavailableView
-//  — icon in a soft tinted circle, clear title/subtitle, and an optional
-//  action button. Deliberately NOT cartoon illustration artwork: Apple's
-//  own apps (Notes, Reminders, Things 3) use exactly this pattern —
-//  tinted SF Symbol + text — for empty states, so this stays consistent
-//  with the native-HIG visual language the rest of the app already uses.
+//  A reusable empty state: icon in a soft tinted circle, title,
+//  subtitle, and an optional action button. Used throughout the app in
+//  place of the default ContentUnavailableView.
 //
 
 import SwiftUI

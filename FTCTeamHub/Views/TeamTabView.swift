@@ -2,17 +2,9 @@
 //  TeamTabView.swift
 //  FTCTeamHub
 //
-//  NEW: added a "Rules" segment — a searchable plain-language glossary of
-//  common FTC terminology plus direct links to the OFFICIAL Game Manual
-//  and Q&A System. Deliberately does NOT reproduce manual text verbatim
-//  (that's FIRST's copyrighted material, and it changes every season) —
-//  instead it explains concepts in original wording and sends you to the
-//  authoritative source for actual rule numbers and point values.
-//
-//  NEW: the "Version 1.0" label in AboutView is now wrapped in
-//  SecretResetTrigger — tap it 7 times within 3 seconds to reveal the
-//  hidden "Reset App Data" flow. No visible reset button exists anywhere
-//  else in the app.
+//  Team roster, team settings, a searchable plain-language FTC
+//  terminology glossary with links to the official Game Manual and Q&A
+//  System, and the About screen.
 //
 
 import SwiftUI
@@ -58,6 +50,9 @@ private struct ProfileSettingsView: View {
     @Environment(\.syncService) private var syncService
     @Environment(AuthenticationManager.self) private var authManager
     @AppStorage("accentColorRaw") private var accentColorRaw: String = AvatarColor.blue.rawValue
+    @AppStorage("cloudSyncEnabled") private var cloudSyncEnabled = false
+    @State private var isPresentingReset = false
+    @State private var cloudSyncError: String?
 
     private var teamSettings: TeamSettings {
         if let existing = teamSettingsList.first { return existing }
@@ -80,6 +75,40 @@ private struct ProfileSettingsView: View {
                 TeamSettingsFields(teamSettings: teamSettings, syncService: syncService)
             }
 
+            Section("Data & Sync") {
+                Toggle("Enable team cloud sync", isOn: $cloudSyncEnabled)
+                    .onChange(of: cloudSyncEnabled) { _, enabled in
+                        if enabled {
+                            do {
+                                guard let syncService else {
+                                    cloudSyncError = "The sync service is unavailable."
+                                    cloudSyncEnabled = false
+                                    return
+                                }
+                                syncService.start(modelContext: context)
+                                try syncService.syncLocalRecords(in: context)
+                                authManager.setSyncService(syncService)
+                            } catch {
+                                syncService?.stop()
+                                authManager.setSyncService(nil)
+                                cloudSyncError = error.localizedDescription
+                                cloudSyncEnabled = false
+                            }
+                        } else {
+                            syncService?.stop()
+                            authManager.setSyncService(nil)
+                        }
+                    }
+                Text(cloudSyncEnabled
+                     ? "Sync is on. This device’s local records are uploaded and existing team records may download."
+                     : "Off for a clean start. Turn on only after securing Firestore rules; local app accounts do not authenticate with Firebase.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Button("Reset all local app data", role: .destructive) {
+                    isPresentingReset = true
+                }
+            }
+
             Section("App Accent Color") {
                 HStack(spacing: 12) {
                     ForEach(AvatarColor.allCases) { swatch in
@@ -90,6 +119,17 @@ private struct ProfileSettingsView: View {
                                 if accentColorRaw == swatch.rawValue {
                                     Image(systemName: "checkmark").font(.caption.bold()).foregroundStyle(.white)
                                 }
+                            }
+                            .sheet(isPresented: $isPresentingReset) {
+                                ResetConfirmationSheet()
+                            }
+                            .alert("Could not enable cloud sync", isPresented: Binding(
+                                get: { cloudSyncError != nil },
+                                set: { if !$0 { cloudSyncError = nil } }
+                            )) {
+                                Button("OK", role: .cancel) { cloudSyncError = nil }
+                            } message: {
+                                Text(cloudSyncError ?? "Please try again.")
                             }
                             .onTapGesture {
                                 UIImpactFeedbackGenerator(style: .light).impactOccurred()
@@ -400,9 +440,6 @@ private struct AboutView: View {
                         .foregroundStyle(Color.accentColor)
                     Text("FTC Team Hub").font(.headline)
 
-                    // Hidden reset unlock lives here: tap this label 7
-                    // times within 3 seconds to reveal "Reset App Data".
-                    // No visible reset button exists anywhere else.
                     SecretResetTrigger {
                         Text("Version 1.0")
                             .font(.caption)
@@ -413,7 +450,9 @@ private struct AboutView: View {
                 .padding(.vertical, 12)
             }
             Section("About") {
-                Text("Built for internal team management: roster, testing telemetry, tasks, engineering notebook, ideas, pit ops, scoring strategy, and live FTC competition data — all synced across every teammate's device.")
+                LabeledContent("App version", value: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "Development")
+                LabeledContent("Build", value: Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "Development")
+                Text("Built for team management: roster, testing telemetry, tasks, engineering notebook, ideas, pit ops, match scouting, scoring strategy, and FTCScout event data. Team records sync through your configured Firestore project.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }
