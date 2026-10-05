@@ -139,7 +139,6 @@ struct TasksTabView: View {
             .padding(.horizontal, FTCDesign.space16)
             .background(.regularMaterial)
             .transition(.opacity)
-            .accessibilityLiveRegion(.polite)
         }
     }
 

@@ -8,6 +8,16 @@
 import SwiftUI
 import SwiftData
 
+private struct ResetConfirmationToolbar: ToolbarContent {
+    let onCancel: () -> Void
+
+    var body: some ToolbarContent {
+        ToolbarItem(placement: .cancellationAction) {
+            Button("Cancel", action: onCancel)
+        }
+    }
+}
+
 struct ResetConfirmationSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var context
@@ -96,11 +106,9 @@ struct ResetConfirmationSheet: View {
                 }
             }
             .navigationTitle("Reset App Data")
-            .toolbar(content: {
-                ToolbarItemGroup(placement: ToolbarItemPlacement.cancellationAction) {
-                    Button("Cancel") { dismiss() }
-                }
-            })
+            .toolbar {
+                ResetConfirmationToolbar { dismiss() }
+            }
         }
         .interactiveDismissDisabled(isWiping)
         .sensoryFeedback(.success, trigger: resultMessage)
