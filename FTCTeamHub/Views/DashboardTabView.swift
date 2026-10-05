@@ -15,6 +15,7 @@ struct DashboardTabView: View {
 
     @Query private var allTasks: [TaskItem]
     @Query private var batteries: [Battery]
+    @Query private var inventoryItems: [InventoryItem]
     @Query private var testRuns: [TestRunRecord]
     @Query(sort: \ActivityEvent.timestamp, order: .reverse) private var activity: [ActivityEvent]
     @Query(sort: \ChecklistRun.timestamp, order: .reverse) private var checklistRuns: [ChecklistRun]
@@ -22,11 +23,31 @@ struct DashboardTabView: View {
     @State private var nextEvent: FTCEventSummary?
     @State private var daysUntilEvent: Int?
     @State private var isLoadingEvent = true
+    @State private var eventLoadError: String?
     @State private var isPresentingSearch = false
+    @State private var isPresentingQuickLog = false
 
     private var myOpenTasks: [TaskItem] {
         guard let uid = authManager.currentUser?.id else { return [] }
         return allTasks.filter { $0.assignedToID == uid && $0.status != .done }
+    }
+
+    private var inventoryAlertCard: some View {
+        GroupBox {
+            Button {
+                router.selection = .inventory
+            } label: {
+                HStack {
+                    Image(systemName: "shippingbox.fill").foregroundStyle(.orange)
+                    Text("\(inventoryNeedingAttention.count) inventory item\(inventoryNeedingAttention.count == 1 ? "" : "s") low or needing maintenance")
+                        .font(.subheadline)
+                        .foregroundStyle(.primary)
+                    Spacer()
+                    Image(systemName: "chevron.right").font(.caption).foregroundStyle(.tertiary)
+                }
+            }
+            .buttonStyle(.plain)
+        }
     }
 
     private var overdueTasks: [TaskItem] {
@@ -35,6 +56,10 @@ struct DashboardTabView: View {
 
     private var batteriesNeedingAttention: [Battery] {
         batteries.filter { $0.status == .dead || $0.cycleCount > 40 }
+    }
+
+    private var inventoryNeedingAttention: [InventoryItem] {
+        inventoryItems.filter { $0.isLowStock || $0.needsMaintenance }
     }
 
     private var todaysChecklist: ChecklistRun? {
@@ -48,40 +73,110 @@ struct DashboardTabView: View {
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(alignment: .leading, spacing: 20) {
+                VStack(alignment: .leading, spacing: 22) {
                     header
                     nextEventCard
+                    sectionHeading("TEAM SNAPSHOT", detail: "Your operation at a glance")
                     statGrid
-                    insightsSection
+                    sectionHeading("PIT STATUS", detail: "Items that may need a hand")
                     if !batteriesNeedingAttention.isEmpty { batteryAlertCard }
+                    if !inventoryNeedingAttention.isEmpty { inventoryAlertCard }
                     if todaysChecklist == nil { checklistNudgeCard }
+                    sectionHeading("PERFORMANCE", detail: "Signals from your own practice data")
+                    insightsSection
+                    sectionHeading("LATEST UPDATES", detail: "Recent work from your crew")
                     recentActivitySection
                 }
-                .padding()
+                .padding(.horizontal, 18)
+                .padding(.top, 10)
+                .padding(.bottom, 24)
             }
-            .navigationTitle("Dashboard")
+            .background(Color(uiColor: .systemGroupedBackground).ignoresSafeArea())
+            .navigationTitle("Overview")
+            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .primaryAction) {
-                    Button { isPresentingSearch = true } label: { Image(systemName: "magnifyingglass") }
+                ToolbarItemGroup(placement: .topBarTrailing) {
+                    Button { router.selection = .calendar } label: {
+                        Image(systemName: "calendar")
+                    }
+                    .accessibilityLabel("Season calendar")
+                    Menu {
+                        Button {
+                            isPresentingQuickLog = true
+                        } label: {
+                            Label("New practice log", systemImage: "square.and.pencil")
+                        }
+                        Button {
+                            router.selection = .notebook
+                        } label: {
+                            Label("Open engineering notebook", systemImage: "book.closed")
+                        }
+                        Button {
+                            isPresentingSearch = true
+                        } label: {
+                            Label("Search team records", systemImage: "magnifyingglass")
+                        }
+                    } label: {
+                        Image(systemName: "plus")
+                            .font(.system(size: 15, weight: .bold))
+                            .foregroundStyle(.white)
+                            .frame(width: 30, height: 30)
+                            .background(FTCBrand.orange, in: RoundedRectangle(cornerRadius: 9))
+                    }
+                    .accessibilityLabel("Create or find team records")
                 }
             }
             .sheet(isPresented: $isPresentingSearch) { GlobalSearchView() }
+            .sheet(isPresented: $isPresentingQuickLog) { QuickPracticeLogSheet() }
             .task { await loadNextEvent() }
+            .refreshable { await loadNextEvent() }
         }
     }
 
     // MARK: - Header
 
     private var header: some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: 9) {
+            HStack(spacing: 7) {
+                Circle().fill(FTCBrand.orange).frame(width: 7, height: 7)
+                Text("WILD CIRCUITS     /     2026—27")
+                    .font(.system(size: 10, weight: .bold, design: .monospaced))
+                    .tracking(0.6)
+                    .foregroundStyle(.secondary)
+                Spacer()
+                if let user = authManager.currentUser {
+                    Text(user.initials)
+                        .font(.system(size: 10, weight: .bold, design: .rounded))
+                        .foregroundStyle(.white)
+                        .frame(width: 31, height: 31)
+                        .background(user.avatarColor.color, in: Circle())
+                }
+            }
             Text(greeting)
-                .font(.title2.bold())
-            if let user = authManager.currentUser {
-                Label(user.role.rawValue, systemImage: user.role.systemImage)
-                    .font(.subheadline)
+                .font(.system(size: 30, weight: .bold, design: .rounded))
+                .tracking(-0.8)
+                .foregroundStyle(.primary)
+            Text("Team 24211  ·  \(Date.now.formatted(.dateTime.weekday(.wide).month(.wide).day()))")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    private func sectionHeading(_ title: String, detail: String) -> some View {
+        HStack(alignment: .bottom) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title)
+                    .font(.system(size: 10, weight: .bold, design: .monospaced))
+                    .tracking(1.1)
+                    .foregroundStyle(FTCBrand.accentText)
+                Text(detail)
+                    .font(.system(.subheadline, design: .rounded, weight: .medium))
                     .foregroundStyle(.secondary)
             }
+            Spacer()
         }
+        .padding(.top, 2)
+        .accessibilityElement(children: .combine)
     }
 
     private var greeting: String {
@@ -101,36 +196,53 @@ struct DashboardTabView: View {
         GroupBox {
             HStack {
                 Image(systemName: "calendar.badge.clock")
-                    .font(.title2)
-                    .foregroundStyle(Color.accentColor)
-                    .frame(width: 32)
+                    .font(.title3.weight(.semibold))
+                    .foregroundStyle(.white)
+                    .frame(width: 42, height: 42)
+                    .background(FTCBrand.midnight, in: RoundedRectangle(cornerRadius: 12))
 
                 VStack(alignment: .leading, spacing: 2) {
                     if isLoadingEvent {
                         Text("Checking upcoming events…").font(.subheadline).foregroundStyle(.secondary)
                     } else if let event = nextEvent, let days = daysUntilEvent {
-                        Text(event.name).font(.subheadline.weight(.semibold)).lineLimit(1)
+                        Text(event.name)
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(.primary)
+                            .lineLimit(2)
                         Text(days == 0 ? "Today" : days == 1 ? "Tomorrow" : "In \(days) days")
                             .font(.caption).foregroundStyle(.secondary)
+                    } else if let eventLoadError {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Upcoming events unavailable").font(.subheadline.weight(.medium))
+                            Text(eventLoadError).font(.caption).foregroundStyle(.secondary).lineLimit(2)
+                        }
                     } else {
-                        Text("No upcoming events found").font(.subheadline).foregroundStyle(.secondary)
+                        Text("No upcoming events published").font(.subheadline).foregroundStyle(.secondary)
                     }
                 }
                 Spacer()
                 Button {
-                    router.selection = .liveData
+                    router.selection = .calendar
                 } label: {
-                    Image(systemName: "chevron.right").foregroundStyle(.tertiary)
+                    Image(systemName: "arrow.up.right")
+                        .font(.caption.weight(.bold))
+                        .foregroundStyle(FTCBrand.accentText)
                 }
+                .accessibilityLabel("Open season calendar")
             }
-            .padding(.vertical, 4)
+            .padding(14)
         }
+        .groupBoxStyle(DashboardGroupBoxStyle())
     }
 
     private func loadNextEvent() async {
         isLoadingEvent = true
+        eventLoadError = nil
+        nextEvent = nil
+        daysUntilEvent = nil
         do {
-            let events = try await api.fetchEvents(season: 2026)
+            let season = Calendar.current.component(.year, from: .now)
+            let events = try await api.fetchEvents(season: season)
             let formatter = DateFormatter()
             formatter.dateFormat = "yyyy-MM-dd"
             formatter.timeZone = TimeZone(identifier: "UTC")
@@ -142,12 +254,19 @@ struct DashboardTabView: View {
             .filter { $0.1 >= Calendar.current.startOfDay(for: .now) }
             .sorted { $0.1 < $1.1 }
 
+            if !events.isEmpty && upcoming.isEmpty &&
+                events.allSatisfy({ formatter.date(from: String($0.start.prefix(10))) == nil }) {
+                eventLoadError = "FTCScout returned event dates in an unexpected format."
+            }
             if let soonest = upcoming.first {
                 nextEvent = soonest.0
-                daysUntilEvent = Calendar.current.dateComponents([.day], from: .now, to: soonest.1).day
+                daysUntilEvent = Calendar.current.dateComponents(
+                    [.day], from: Calendar.current.startOfDay(for: .now),
+                    to: Calendar.current.startOfDay(for: soonest.1)
+                ).day
             }
         } catch {
-            nextEvent = nil
+            eventLoadError = error.localizedDescription
         }
         isLoadingEvent = false
     }
@@ -174,8 +293,8 @@ struct DashboardTabView: View {
             ) { router.selection = .notebook }
 
             DashboardStatCard(
-                title: "Scoring & Chat", value: "Open", subtitle: nil, subtitleColor: .secondary,
-                icon: "sum", tint: .indigo
+                title: "Scout & Events", value: "Open", subtitle: "FTCScout + reports", subtitleColor: .secondary,
+                icon: "antenna.radiowaves.left.and.right", tint: .indigo
             ) { router.selection = .liveData }
         }
     }
@@ -184,11 +303,7 @@ struct DashboardTabView: View {
 
     private var insightsSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Image(systemName: "sparkles")
-                Text("Insights").font(.headline)
-            }
-            Text("On-device trend analysis of your own data — not cloud AI.")
+            Text("Trends are calculated on this device from records entered by your team.")
                 .font(.caption2).foregroundStyle(.tertiary)
 
             VStack(spacing: 8) {
@@ -303,15 +418,17 @@ private struct DashboardStatCard: View {
             VStack(alignment: .leading, spacing: 8) {
                 HStack {
                     Image(systemName: icon)
-                        .font(.subheadline)
-                        .foregroundStyle(tint)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(FTCBrand.accentText)
+                        .frame(width: 31, height: 31)
+                        .background(tint.opacity(0.14), in: RoundedRectangle(cornerRadius: 9))
                     Spacer()
                 }
                 Text(value)
-                    .font(.title2.bold().monospacedDigit())
+                    .font(.system(size: 27, weight: .bold, design: .rounded).monospacedDigit())
                     .foregroundStyle(.primary)
                 Text(title)
-                    .font(.caption)
+                    .font(.system(.caption, design: .rounded, weight: .medium))
                     .foregroundStyle(.secondary)
                 if let subtitle {
                     Text(subtitle)
@@ -320,10 +437,146 @@ private struct DashboardStatCard: View {
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(12)
-            .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 14))
+            .padding(14)
+            .frame(minHeight: 136, alignment: .topLeading)
+            .background(Color(uiColor: .secondarySystemGroupedBackground),
+                        in: RoundedRectangle(cornerRadius: 17, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 17, style: .continuous)
+                    .stroke(Color.primary.opacity(0.045), lineWidth: 1)
+            }
         }
         .buttonStyle(.plain)
+    }
+}
+
+private struct DashboardGroupBoxStyle: GroupBoxStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.content
+            .background(Color(uiColor: .secondarySystemGroupedBackground),
+                        in: RoundedRectangle(cornerRadius: 17, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 17, style: .continuous)
+                    .stroke(Color.primary.opacity(0.045), lineWidth: 1)
+            }
+    }
+}
+
+private struct QuickPracticeLogSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var context
+    @Environment(\.syncService) private var syncService
+    @Environment(AuthenticationManager.self) private var authManager
+
+    @State private var title = ""
+    @State private var area = "Robot"
+    @State private var observation = ""
+    @State private var followUp = ""
+    @State private var saveError: String?
+
+    private let areas = ["Robot", "Software", "Autonomous", "Drive practice", "Pit"]
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    LabeledContent("DATE", value: Date.now.formatted(date: .complete, time: .omitted))
+                    TextField("Log title", text: $title, prompt: Text("What did you work on?"))
+                    Picker("Area", selection: $area) {
+                        ForEach(areas, id: \.self) { Text($0).tag($0) }
+                    }
+                } header: {
+                    Text("PRACTICE LOG")
+                } footer: {
+                    Text("Saved to the engineering notebook and tagged for search.")
+                }
+
+                Section("Observation / result") {
+                    TextEditor(text: $observation)
+                        .frame(minHeight: 120)
+                        .overlay(alignment: .topLeading) {
+                            if observation.isEmpty {
+                                Text("What happened? Record measurements, behavior, or decisions.")
+                                    .font(.body)
+                                    .foregroundStyle(.tertiary)
+                                    .padding(.top, 8)
+                                    .padding(.leading, 5)
+                                    .allowsHitTesting(false)
+                            }
+                        }
+                }
+                Section("Next test") {
+                    TextEditor(text: $followUp)
+                        .frame(minHeight: 85)
+                        .overlay(alignment: .topLeading) {
+                            if followUp.isEmpty {
+                                Text("What will the team try next?")
+                                    .font(.body)
+                                    .foregroundStyle(.tertiary)
+                                    .padding(.top, 8)
+                                    .padding(.leading, 5)
+                                    .allowsHitTesting(false)
+                            }
+                        }
+                }
+                if let saveError {
+                    Section {
+                        Label(saveError, systemImage: "exclamationmark.triangle.fill")
+                            .foregroundStyle(.red)
+                    }
+                }
+            }
+            .navigationTitle("New Practice Log")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Save") { save() }
+                        .disabled(!canSave)
+                }
+            }
+        }
+    }
+
+    private var canSave: Bool {
+        !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
+        !observation.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    private func save() {
+        guard let author = authManager.currentUser else {
+            saveError = "Sign in to save a practice log."
+            return
+        }
+        var content = "## Observation / result\n\(observation.trimmingCharacters(in: .whitespacesAndNewlines))"
+        if !followUp.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            content += "\n\n## Next test\n\(followUp.trimmingCharacters(in: .whitespacesAndNewlines))"
+        }
+        let entry = NotebookEntry(
+            authorID: author.id,
+            authorName: author.name,
+            title: title.trimmingCharacters(in: .whitespacesAndNewlines),
+            content: content,
+            tags: ["Practice Log", area]
+        )
+        context.insert(entry)
+        let activity = ActivityEvent(
+            authorID: author.id,
+            authorName: author.name,
+            kind: .notebookEntry,
+            message: "added a \(area.lowercased()) practice log: \(entry.title)"
+        )
+        context.insert(activity)
+        do {
+            try context.save()
+            syncService?.pushNotebookEntry(entry)
+            syncService?.pushActivity(activity)
+            dismiss()
+        } catch {
+            saveError = error.localizedDescription
+        }
     }
 }
 

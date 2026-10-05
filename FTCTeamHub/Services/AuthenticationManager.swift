@@ -21,7 +21,7 @@ final class AuthenticationManager {
     var errorMessage: String?
 
     private let modelContext: ModelContext
-    private let syncService: FirebaseSyncService?
+    private var syncService: FirebaseSyncService?
     private let sessionKey = "com.ftcteamhub.session.userID"
 
     init(modelContext: ModelContext, syncService: FirebaseSyncService? = nil) {
@@ -40,6 +40,10 @@ final class AuthenticationManager {
         }
     }
 
+    func setSyncService(_ service: FirebaseSyncService?) {
+        syncService = service
+    }
+
     func signUp(name: String, email: String, password: String, role: TeamRole, avatarColor: AvatarColor) {
         errorMessage = nil
 
@@ -52,7 +56,14 @@ final class AuthenticationManager {
         }
 
         let descriptor = FetchDescriptor<AppUser>(predicate: #Predicate { $0.email == normalizedEmail })
-        if let existing = try? modelContext.fetch(descriptor), !existing.isEmpty {
+        let existing: [AppUser]
+        do {
+            existing = try modelContext.fetch(descriptor)
+        } catch {
+            errorMessage = "Couldn't check for an existing account: \(error.localizedDescription)"
+            return
+        }
+        if !existing.isEmpty {
             errorMessage = "An account with that email already exists. Try signing in instead."
             return
         }
@@ -60,13 +71,29 @@ final class AuthenticationManager {
         let user = AppUser(email: normalizedEmail, name: trimmedName, role: role, avatarColor: avatarColor,
                             passwordHash: Self.hash(password), isLogged: true)
         modelContext.insert(user)
-        try? modelContext.save()
+        do {
+            try modelContext.save()
+        } catch {
+            modelContext.delete(user)
+            errorMessage = "Couldn't save your account: \(error.localizedDescription)"
+            return
+        }
 
         // Push to Firestore so other devices see this team member and can
         // sign in as them once it syncs down.
         syncService?.pushUser(user)
 
-        KeychainService.save(sessionKey, value: user.id.uuidString)
+        guard KeychainService.save(sessionKey, value: user.id.uuidString) else {
+            user.isLogged = false
+            do {
+                try modelContext.save()
+            } catch {
+                errorMessage = "Account created, but this iPhone couldn't save the sign-in session: \(error.localizedDescription)"
+                return
+            }
+            errorMessage = "Account created, but this iPhone couldn't save the sign-in session. Try signing in again."
+            return
+        }
         currentUser = user
     }
 
@@ -75,7 +102,14 @@ final class AuthenticationManager {
         let normalizedEmail = email.trimmingCharacters(in: .whitespaces).lowercased()
 
         let descriptor = FetchDescriptor<AppUser>(predicate: #Predicate { $0.email == normalizedEmail })
-        guard let user = try? modelContext.fetch(descriptor).first else {
+        let user: AppUser?
+        do {
+            user = try modelContext.fetch(descriptor).first
+        } catch {
+            errorMessage = "Couldn't read team accounts: \(error.localizedDescription)"
+            return
+        }
+        guard let user else {
             errorMessage = "No account found with that email on this device yet. If you signed up on another device, make sure both phones have been online recently so it can sync — then try again in a few seconds."
             return
         }
@@ -86,8 +120,24 @@ final class AuthenticationManager {
         }
 
         user.isLogged = true
-        try? modelContext.save()
-        KeychainService.save(sessionKey, value: user.id.uuidString)
+        do {
+            try modelContext.save()
+        } catch {
+            user.isLogged = false
+            errorMessage = "Couldn't save your sign-in: \(error.localizedDescription)"
+            return
+        }
+        guard KeychainService.save(sessionKey, value: user.id.uuidString) else {
+            user.isLogged = false
+            do {
+                try modelContext.save()
+            } catch {
+                errorMessage = "Couldn't save the sign-in session or restore the account state: \(error.localizedDescription)"
+                return
+            }
+            errorMessage = "Couldn't save the sign-in session on this iPhone. Please try again."
+            return
+        }
         currentUser = user
     }
 

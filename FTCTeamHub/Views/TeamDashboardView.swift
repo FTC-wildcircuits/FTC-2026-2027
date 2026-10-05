@@ -15,33 +15,36 @@ import Charts
 struct TeamDashboardView: View {
     let teamNumber: Int
     let teamName: String
+    let season: Int
     let api: FTCScoutAPIServicing
 
     @State private var seasonHistory: [FTCSeasonStat] = []
     @State private var eventsAttended: [FTCEventAttended] = []
     @State private var isLoadingHistory = true
     @State private var isLoadingEvents = true
-    @State private var errorMessage: String?
+    @State private var historyError: String?
+    @State private var eventsError: String?
 
-    private let seasonsToFetch = [2022, 2023, 2024, 2025]
+    private var seasonsToFetch: [Int] { Array((season - 4)...season) }
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
                 header
 
-                if let errorMessage {
-                    Text(errorMessage)
-                        .font(.footnote)
-                        .foregroundStyle(.red)
-                        .padding(.horizontal)
-                }
-
                 statCardsRow
 
                 GroupBox("OPR Trend by Season") {
                     if isLoadingHistory {
                         ProgressView().frame(maxWidth: .infinity, minHeight: 180)
+                    } else if let historyError {
+                        ContentUnavailableView {
+                            Label("OPR history unavailable", systemImage: "wifi.exclamationmark")
+                        } description: {
+                            Text(historyError)
+                        } actions: {
+                            Button("Retry") { Task { await loadHistory() } }
+                        }
                     } else if seasonHistory.isEmpty {
                         Text("No historical data available for this team.")
                             .font(.footnote).foregroundStyle(.secondary)
@@ -62,15 +65,23 @@ struct TeamDashboardView: View {
                 GroupBox("Events Attended") {
                     if isLoadingEvents {
                         ProgressView().frame(maxWidth: .infinity, minHeight: 100)
+                    } else if let eventsError {
+                        ContentUnavailableView {
+                            Label("Event history unavailable", systemImage: "wifi.exclamationmark")
+                        } description: {
+                            Text(eventsError)
+                        } actions: {
+                            Button("Retry") { Task { await loadEvents() } }
+                        }
                     } else if eventsAttended.isEmpty {
-                        Text("No events found for the current season.")
+                        Text("FTCScout returned no event history for the \(season) season.")
                             .font(.footnote).foregroundStyle(.secondary)
                             .frame(maxWidth: .infinity, minHeight: 60)
                     } else {
                         VStack(spacing: 0) {
                             ForEach(Array(eventsAttended.enumerated()), id: \.element.id) { index, attended in
                                 NavigationLink {
-                                    AlliancePartnersView(teamNumber: teamNumber, event: attended.event, api: api)
+                                    AlliancePartnersView(teamNumber: teamNumber, event: attended.event, season: season, api: api)
                                 } label: {
                                     HStack {
                                         VStack(alignment: .leading, spacing: 2) {
@@ -109,30 +120,30 @@ struct TeamDashboardView: View {
 
     private var statCardsRow: some View {
         HStack(spacing: 10) {
-            StatCard(title: "Latest OPR", value: seasonHistory.last.map { String(format: "%.1f", $0.totalOPR) } ?? "—")
+            StatCard(title: "Latest OPR", value: seasonHistory.max(by: { $0.season < $1.season }).map { String(format: "%.1f", $0.totalOPR) } ?? "—")
             StatCard(title: "Seasons Tracked", value: "\(seasonHistory.count)")
-            StatCard(title: "Events (this yr)", value: "\(eventsAttended.count)")
+            StatCard(title: "Events (\(season))", value: "\(eventsAttended.count)")
         }
     }
 
     private func loadHistory() async {
         isLoadingHistory = true
+        historyError = nil
         do {
             seasonHistory = try await api.fetchSeasonHistory(teamNumber: teamNumber, seasons: seasonsToFetch)
         } catch {
-            errorMessage = error.localizedDescription
+            historyError = error.localizedDescription
         }
         isLoadingHistory = false
     }
 
     private func loadEvents() async {
         isLoadingEvents = true
+        eventsError = nil
         do {
-            eventsAttended = try await api.fetchEventsAttended(teamNumber: teamNumber, season: 2025)
+            eventsAttended = try await api.fetchEventsAttended(teamNumber: teamNumber, season: season)
         } catch {
-            // Non-fatal: history chart above still renders. Surface a lighter
-            // message only if BOTH history and events fail.
-            if seasonHistory.isEmpty { errorMessage = error.localizedDescription }
+            eventsError = error.localizedDescription
         }
         isLoadingEvents = false
     }
@@ -158,6 +169,7 @@ private struct StatCard: View {
 private struct AlliancePartnersView: View {
     let teamNumber: Int
     let event: FTCEventSummary
+    let season: Int
     let api: FTCScoutAPIServicing
 
     @State private var partners: [FTCAlliancePartner] = []
@@ -169,7 +181,13 @@ private struct AlliancePartnersView: View {
             if isLoading {
                 ProgressView().frame(maxWidth: .infinity)
             } else if let errorMessage {
-                Text(errorMessage).font(.footnote).foregroundStyle(.red)
+                ContentUnavailableView {
+                    Label("Alliance data unavailable", systemImage: "wifi.exclamationmark")
+                } description: {
+                    Text(errorMessage)
+                } actions: {
+                    Button("Retry") { Task { await loadPartners() } }
+                }
             } else if partners.isEmpty {
                 ContentUnavailableView("No alliance data", systemImage: "person.2",
                                        description: Text("No match data was returned for this event yet."))
@@ -188,13 +206,17 @@ private struct AlliancePartnersView: View {
         }
         .navigationTitle(event.name)
         .navigationBarTitleDisplayMode(.inline)
-        .task {
-            do {
-                partners = try await api.fetchAlliancePartners(teamNumber: teamNumber, eventCode: event.code, season: 2025)
-            } catch {
-                errorMessage = error.localizedDescription
-            }
-            isLoading = false
+        .task { await loadPartners() }
+    }
+
+    private func loadPartners() async {
+        isLoading = true
+        errorMessage = nil
+        do {
+            partners = try await api.fetchAlliancePartners(teamNumber: teamNumber, eventCode: event.code, season: season)
+        } catch {
+            errorMessage = error.localizedDescription
         }
+        isLoading = false
     }
 }

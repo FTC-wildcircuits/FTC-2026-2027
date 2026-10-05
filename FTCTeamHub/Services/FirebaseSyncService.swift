@@ -24,12 +24,16 @@ final class FirebaseSyncService {
     private var batteryListener: ListenerRegistration?
     private var checklistListener: ListenerRegistration?
     private var inventoryListener: ListenerRegistration?
+    private var scoutingReportListener: ListenerRegistration?
     private var teamSettingsListener: ListenerRegistration?
     private var sponsorListener: ListenerRegistration?
     private var expenseListener: ListenerRegistration?
     private weak var modelContext: ModelContext?
+    private var isRunning = false
 
     func start(modelContext: ModelContext) {
+        guard !isRunning else { return }
+        isRunning = true
         self.modelContext = modelContext
         listenForUserChanges()
         listenForTaskChanges()
@@ -40,12 +44,14 @@ final class FirebaseSyncService {
         listenForBatteryChanges()
         listenForChecklistChanges()
         listenForInventoryChanges()
+        listenForScoutingReportChanges()
         listenForTeamSettingsChanges()
         listenForSponsorChanges()
         listenForExpenseChanges()
     }
 
     func stop() {
+        isRunning = false
         taskListener?.remove()
         activityListener?.remove()
         userListener?.remove()
@@ -55,14 +61,47 @@ final class FirebaseSyncService {
         batteryListener?.remove()
         checklistListener?.remove()
         inventoryListener?.remove()
+        scoutingReportListener?.remove()
         teamSettingsListener?.remove()
         sponsorListener?.remove()
         expenseListener?.remove()
     }
 
+    func syncLocalRecords(in context: ModelContext) throws {
+        guard isRunning else { return }
+        let users = try context.fetch(FetchDescriptor<AppUser>())
+        let tasks = try context.fetch(FetchDescriptor<TaskItem>())
+        let activity = try context.fetch(FetchDescriptor<ActivityEvent>())
+        let notebook = try context.fetch(FetchDescriptor<NotebookEntry>())
+        let ideas = try context.fetch(FetchDescriptor<Idea>())
+        let testRuns = try context.fetch(FetchDescriptor<TestRunRecord>())
+        let batteries = try context.fetch(FetchDescriptor<Battery>())
+        let checklists = try context.fetch(FetchDescriptor<ChecklistRun>())
+        let inventory = try context.fetch(FetchDescriptor<InventoryItem>())
+        let scoutingReports = try context.fetch(FetchDescriptor<ScoutingReport>())
+        let settings = try context.fetch(FetchDescriptor<TeamSettings>())
+        let sponsors = try context.fetch(FetchDescriptor<Sponsor>())
+        let expenses = try context.fetch(FetchDescriptor<BudgetExpense>())
+
+        users.forEach(pushUser)
+        tasks.forEach(pushTask)
+        activity.forEach(pushActivity)
+        notebook.forEach(pushNotebookEntry)
+        ideas.forEach(pushIdea)
+        testRuns.forEach(pushTestRun)
+        batteries.forEach(pushBattery)
+        checklists.forEach(pushChecklistRun)
+        inventory.forEach(pushInventoryItem)
+        scoutingReports.forEach(pushScoutingReport)
+        settings.forEach(pushTeamSettings)
+        sponsors.forEach(pushSponsor)
+        expenses.forEach(pushExpense)
+    }
+
     // MARK: - Roster (AppUser)
 
     func pushUser(_ user: AppUser) {
+        guard isRunning else { return }
         let data: [String: Any] = [
             "email": user.email, "name": user.name, "roleRaw": user.roleRaw,
             "avatarColorRaw": user.avatarColorRaw, "passwordHash": user.passwordHash, "joinedAt": user.joinedAt
@@ -95,6 +134,7 @@ final class FirebaseSyncService {
     // MARK: - Tasks
 
     func pushTask(_ task: TaskItem) {
+        guard isRunning else { return }
         let data: [String: Any] = [
             "title": task.title, "taskDescription": task.taskDescription,
             "assignedToID": task.assignedToID?.uuidString ?? "", "assignedToName": task.assignedToName,
@@ -135,6 +175,7 @@ final class FirebaseSyncService {
     // MARK: - Activity feed
 
     func pushActivity(_ event: ActivityEvent) {
+        guard isRunning else { return }
         let data: [String: Any] = [
             "authorID": event.authorID.uuidString, "authorName": event.authorName,
             "kind": event.kind.rawValue, "message": event.message, "timestamp": event.timestamp
@@ -172,6 +213,7 @@ final class FirebaseSyncService {
     // MARK: - Notebook entries
 
     func pushNotebookEntry(_ entry: NotebookEntry) {
+        guard isRunning else { return }
         var data: [String: Any] = [
             "authorID": entry.authorID.uuidString, "authorName": entry.authorName,
             "title": entry.title, "content": entry.content, "tags": entry.tags, "timestamp": entry.timestamp
@@ -189,6 +231,7 @@ final class FirebaseSyncService {
     }
 
     func deleteNotebookEntry(id: UUID) {
+        guard isRunning else { return }
         db.collection("notebook").document(id.uuidString).delete()
     }
 
@@ -249,6 +292,7 @@ final class FirebaseSyncService {
     // MARK: - Ideas
 
     func pushIdea(_ idea: Idea) {
+        guard isRunning else { return }
         let data: [String: Any] = [
             "authorID": idea.authorID.uuidString, "authorName": idea.authorName,
             "summary": idea.summary, "detail": idea.detail,
@@ -284,6 +328,7 @@ final class FirebaseSyncService {
     // MARK: - Test runs
 
     func pushTestRun(_ record: TestRunRecord) {
+        guard isRunning else { return }
         var data: [String: Any] = [
             "driverID": record.driverID.uuidString, "driverName": record.driverName, "date": record.date,
             "autoScore": record.autoScore, "teleopScore": record.teleopScore, "endgameScore": record.endgameScore,
@@ -330,6 +375,7 @@ final class FirebaseSyncService {
     // MARK: - Batteries
 
     func pushBattery(_ battery: Battery) {
+        guard isRunning else { return }
         let data: [String: Any] = [
             "label": battery.label, "statusRaw": battery.statusRaw, "cycleCount": battery.cycleCount,
             "lastChargedAt": battery.lastChargedAt as Any, "notes": battery.notes, "addedAt": battery.addedAt
@@ -362,6 +408,7 @@ final class FirebaseSyncService {
     // MARK: - Checklists
 
     func pushChecklistRun(_ run: ChecklistRun) {
+        guard isRunning else { return }
         var data: [String: Any] = [
             "typeRaw": run.typeRaw, "completedByID": run.completedByID.uuidString,
             "completedByName": run.completedByName, "timestamp": run.timestamp
@@ -403,10 +450,13 @@ final class FirebaseSyncService {
     // MARK: - Inventory
 
     func pushInventoryItem(_ item: InventoryItem) {
+        guard isRunning else { return }
         let data: [String: Any] = [
             "name": item.name, "category": item.category, "binLocation": item.binLocation,
             "quantity": item.quantity, "isCheckedOut": item.isCheckedOut,
-            "checkedOutByName": item.checkedOutByName, "notes": item.notes, "addedAt": item.addedAt
+            "checkedOutByName": item.checkedOutByName, "notes": item.notes,
+            "lowStockThreshold": item.lowStockThreshold, "needsMaintenance": item.needsMaintenance,
+            "addedAt": item.addedAt
         ]
         db.collection("inventory").document(item.id.uuidString).setData(data, merge: true)
     }
@@ -432,13 +482,83 @@ final class FirebaseSyncService {
         item.isCheckedOut = data["isCheckedOut"] as? Bool ?? item.isCheckedOut
         item.checkedOutByName = data["checkedOutByName"] as? String ?? item.checkedOutByName
         item.notes = data["notes"] as? String ?? item.notes
+        item.lowStockThreshold = data["lowStockThreshold"] as? Int ?? item.lowStockThreshold
+        item.needsMaintenance = data["needsMaintenance"] as? Bool ?? item.needsMaintenance
         if existing == nil { context.insert(item) }
         try? context.save()
+    }
+
+    // MARK: - Match scouting
+
+    func pushScoutingReport(_ report: ScoutingReport) {
+        guard isRunning else { return }
+        let data: [String: Any] = [
+            "teamNumber": report.teamNumber, "teamName": report.teamName,
+            "eventName": report.eventName, "matchNumber": report.matchNumber,
+            "autonomousScore": report.autonomousScore, "teleOpScore": report.teleOpScore,
+            "endgameScore": report.endgameScore, "capabilities": report.capabilities,
+            "notes": report.notes, "recordedByID": report.recordedByID.uuidString,
+            "recordedByName": report.recordedByName, "observedAt": report.observedAt
+        ]
+        db.collection("scoutingReports").document(report.id.uuidString).setData(data, merge: true)
+    }
+
+    func deleteScoutingReport(id: UUID) {
+        guard isRunning else { return }
+        db.collection("scoutingReports").document(id.uuidString).delete()
+    }
+
+    private func listenForScoutingReportChanges() {
+        scoutingReportListener = db.collection("scoutingReports").addSnapshotListener { [weak self] snapshot, error in
+            guard let self, let snapshot, error == nil else { return }
+            for change in snapshot.documentChanges {
+                if change.type == .removed {
+                    self.deleteScoutingReportLocally(id: change.document.documentID)
+                } else {
+                    self.upsertScoutingReport(from: change.document)
+                }
+            }
+        }
+    }
+
+    private func upsertScoutingReport(from document: QueryDocumentSnapshot) {
+        guard let context = modelContext, let id = UUID(uuidString: document.documentID) else { return }
+        let data = document.data()
+        guard let recordedByID = UUID(uuidString: data["recordedByID"] as? String ?? "") else { return }
+        let descriptor = FetchDescriptor<ScoutingReport>(predicate: #Predicate { $0.id == id })
+        let existing = try? context.fetch(descriptor).first
+        let report = existing ?? ScoutingReport(
+            id: id, teamNumber: 0, teamName: "", eventName: "", matchNumber: "",
+            recordedByID: recordedByID, recordedByName: ""
+        )
+        report.teamNumber = data["teamNumber"] as? Int ?? report.teamNumber
+        report.teamName = data["teamName"] as? String ?? report.teamName
+        report.eventName = data["eventName"] as? String ?? report.eventName
+        report.matchNumber = data["matchNumber"] as? String ?? report.matchNumber
+        report.autonomousScore = data["autonomousScore"] as? Int ?? report.autonomousScore
+        report.teleOpScore = data["teleOpScore"] as? Int ?? report.teleOpScore
+        report.endgameScore = data["endgameScore"] as? Int ?? report.endgameScore
+        report.capabilities = data["capabilities"] as? [String] ?? report.capabilities
+        report.notes = data["notes"] as? String ?? report.notes
+        report.recordedByName = data["recordedByName"] as? String ?? report.recordedByName
+        report.observedAt = (data["observedAt"] as? Timestamp)?.dateValue() ?? report.observedAt
+        if existing == nil { context.insert(report) }
+        try? context.save()
+    }
+
+    private func deleteScoutingReportLocally(id documentID: String) {
+        guard let context = modelContext, let id = UUID(uuidString: documentID) else { return }
+        let descriptor = FetchDescriptor<ScoutingReport>(predicate: #Predicate { $0.id == id })
+        if let report = try? context.fetch(descriptor).first {
+            context.delete(report)
+            try? context.save()
+        }
     }
 
     // MARK: - Team Settings (single shared row, doc id fixed as "shared")
 
     func pushTeamSettings(_ settings: TeamSettings) {
+        guard isRunning else { return }
         let data: [String: Any] = [
             "teamNumber": settings.teamNumber, "teamName": settings.teamName,
             "rookieYear": settings.rookieYear, "seasonName": settings.seasonName
@@ -464,6 +584,7 @@ final class FirebaseSyncService {
     // MARK: - Sponsors
 
     func pushSponsor(_ sponsor: Sponsor) {
+        guard isRunning else { return }
         let data: [String: Any] = [
             "name": sponsor.name, "contactName": sponsor.contactName, "contactEmail": sponsor.contactEmail,
             "pledgedAmount": sponsor.pledgedAmount, "receivedAmount": sponsor.receivedAmount,
@@ -499,6 +620,7 @@ final class FirebaseSyncService {
     // MARK: - Budget Expenses
 
     func pushExpense(_ expense: BudgetExpense) {
+        guard isRunning else { return }
         let data: [String: Any] = [
             "item": expense.item, "amount": expense.amount, "category": expense.category,
             "date": expense.date, "notes": expense.notes, "addedByName": expense.addedByName

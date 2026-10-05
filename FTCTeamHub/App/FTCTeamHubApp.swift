@@ -18,7 +18,7 @@ struct FTCTeamHubApp: App {
             TestRunRecord.self, Idea.self, ActivityEvent.self, TrackedTeam.self,
             Battery.self, ChecklistRun.self, InventoryItem.self,
             TeamSettings.self, Sponsor.self, BudgetExpense.self,
-            ScoringElement.self
+            ScoringElement.self, ScoutingReport.self
         ])
         let config = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
         return try! ModelContainer(for: schema, configurations: [config])
@@ -42,36 +42,12 @@ struct FTCTeamHubApp: App {
                 .environment(\.chatService, chatService)
                 .tint((AvatarColor(rawValue: accentColorRaw) ?? .blue).color)
                 .onAppear {
-                    syncService.start(modelContext: container.mainContext)
-                    chatService.start()
                     NotificationScheduler.requestAuthorizationIfNeeded()
-                    seedDefaultScoringElementsIfNeeded()
                 }
         }
         .modelContainer(container)
     }
 
-    /// Seeds a starter set of placeholder scoring elements (0 points each)
-    /// so the Scoring Simulator isn't empty on first launch — the team
-    /// edits the point values once the real Game Manual is released.
-    private func seedDefaultScoringElementsIfNeeded() {
-        let context = container.mainContext
-        let descriptor = FetchDescriptor<ScoringElement>()
-        guard let count = try? context.fetchCount(descriptor), count == 0 else { return }
-
-        let defaults: [(String, ScoringPhase, Int)] = [
-            ("Leave / Depart Start", .autonomous, 0),
-            ("Score Game Element (Auto)", .autonomous, 0),
-            ("Score Game Element (TeleOp)", .teleop, 0),
-            ("Cycle Bonus", .teleop, 0),
-            ("Park", .endgame, 0),
-            ("Climb / Hang", .endgame, 0)
-        ]
-        for (index, entry) in defaults.enumerated() {
-            context.insert(ScoringElement(name: entry.0, phase: entry.1, pointValue: entry.2, sortOrder: index))
-        }
-        try? context.save()
-    }
 }
 
 // MARK: - Environment keys
@@ -109,10 +85,31 @@ struct ContentView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.syncService) private var syncService
     @State private var authManager: AuthenticationManager?
+    @State private var launchError: String?
+    @AppStorage("com.ftcteamhub.clean-slate.2026-27") private var cleanSlateApplied = false
+    @AppStorage("cloudSyncEnabled") private var cloudSyncEnabled = false
 
     var body: some View {
         Group {
-            if let authManager {
+            if let launchError {
+                VStack(spacing: 16) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .font(.system(size: 42))
+                        .foregroundStyle(FTCBrand.orange)
+                    Text("Workspace setup could not finish")
+                        .font(.title2.bold())
+                    Text(launchError)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                    Button("Try again") {
+                        self.launchError = nil
+                        prepareWorkspace()
+                    }
+                    .buttonStyle(.borderedProminent)
+                }
+                .padding(28)
+            } else if let authManager {
                 if authManager.currentUser != nil {
                     MainTabView()
                         .environment(authManager)
@@ -123,66 +120,125 @@ struct ContentView: View {
                         .transition(.opacity)
                 }
             } else {
-                ProgressView()
+                FTCLoadingView()
             }
         }
         .animation(.easeInOut(duration: 0.2), value: authManager?.currentUser?.id)
-        .onAppear {
-            if authManager == nil {
-                authManager = AuthenticationManager(modelContext: modelContext, syncService: syncService)
+        .onAppear(perform: prepareWorkspace)
+        .onChange(of: cloudSyncEnabled) { _, enabled in
+            if enabled {
+                syncService?.start(modelContext: modelContext)
+                authManager?.setSyncService(syncService)
+            } else {
+                syncService?.stop()
+                authManager?.setSyncService(nil)
             }
+        }
+    }
+
+    private func prepareWorkspace() {
+        guard authManager == nil else { return }
+        do {
+            if !cleanSlateApplied {
+                cloudSyncEnabled = false
+                try DataResetManager.wipeAllLocalData(context: modelContext, includeRoster: true)
+                cleanSlateApplied = true
+            }
+            if cloudSyncEnabled {
+                syncService?.start(modelContext: modelContext)
+                try syncService?.syncLocalRecords(in: modelContext)
+            }
+            authManager = AuthenticationManager(
+                modelContext: modelContext,
+                syncService: cloudSyncEnabled ? syncService : nil
+            )
+        } catch {
+            launchError = error.localizedDescription
         }
     }
 }
 
-// MARK: - Main TabView — ten modules, Dashboard first
+// MARK: - Main TabView
 
 struct MainTabView: View {
     @State private var router = TabRouter()
 
     var body: some View {
-        TabView(selection: Binding(get: { router.selection }, set: { router.selection = $0 })) {
+        TabView(selection: Binding(get: { router.rootSelection }, set: { router.selectRoot($0) })) {
             DashboardTabView()
-                .tag(AppTab.dashboard)
+                .tag(RootTab.dashboard)
                 .tabItem { Label("Dashboard", systemImage: "square.grid.2x2.fill") }
 
-            RosterTabView()
-                .tag(AppTab.roster)
-                .tabItem { Label("Roster", systemImage: "person.3.fill") }
-
-            TestingTabView()
-                .tag(AppTab.testing)
-                .tabItem { Label("Testing", systemImage: "gauge.with.dots.needle.67percent") }
-
-            TasksTabView()
-                .tag(AppTab.tasks)
-                .tabItem { Label("Tasks", systemImage: "checklist") }
-
-            NotebookTabView()
-                .tag(AppTab.notebook)
-                .tabItem { Label("Notebook", systemImage: "book.closed.fill") }
-
-            IdeasTabView()
-                .tag(AppTab.ideas)
-                .tabItem { Label("Ideas", systemImage: "lightbulb.fill") }
+            WorkHubTabView()
+                .tag(RootTab.work)
+                .tabItem { Label("Build", systemImage: "hammer.fill") }
 
             PitOpsTabView()
-                .tag(AppTab.pitOps)
+                .tag(RootTab.pitOps)
                 .tabItem { Label("Pit Ops", systemImage: "wrench.and.screwdriver.fill") }
 
-            ChatTabView()
-                .tag(AppTab.chat)
-                .tabItem { Label("Chat", systemImage: "bubble.left.and.bubble.right.fill") }
-
             LiveDataTabView()
-                .tag(AppTab.liveData)
-                .tabItem { Label("Live Data", systemImage: "antenna.radiowaves.left.and.right") }
+                .tag(RootTab.scouting)
+                .tabItem { Label("Scout", systemImage: "antenna.radiowaves.left.and.right") }
 
-            TeamTabView()
-                .tag(AppTab.team)
+            TeamHubTabView()
+                .tag(RootTab.team)
                 .tabItem { Label("Team", systemImage: "gearshape.fill") }
         }
         .environment(router)
+        .toolbar(.hidden, for: .tabBar)
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            TeamTabDock(selection: router.rootSelection, select: router.selectRoot)
+        }
+    }
+}
+
+private struct TeamTabDock: View {
+    let selection: RootTab
+    let select: (RootTab) -> Void
+
+    var body: some View {
+        HStack(spacing: 4) {
+            ForEach(RootTab.allCases) { tab in
+                Button {
+                    select(tab)
+                } label: {
+                    VStack(spacing: 5) {
+                        Image(systemName: tab.systemImage)
+                            .font(.system(size: 18, weight: selection == tab ? .semibold : .regular))
+                            .frame(height: 22)
+                        Text(tab.title)
+                            .font(.system(size: 10, weight: selection == tab ? .semibold : .medium))
+                    }
+                    .foregroundStyle(selection == tab ? Color.primary : Color.secondary)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 54)
+                    .background {
+                        if selection == tab {
+                            RoundedRectangle(cornerRadius: 12)
+                                .fill(FTCBrand.orange.opacity(0.14))
+                                .overlay(alignment: .top) {
+                                    Capsule().fill(FTCBrand.orange).frame(width: 20, height: 2)
+                                }
+                        }
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(tab.title)
+                .accessibilityAddTraits(selection == tab ? .isSelected : [])
+            }
+        }
+        .padding(.horizontal, 10)
+        .padding(.top, 7)
+        .padding(.bottom, 2)
+        .background {
+            Color(uiColor: .systemBackground)
+                .overlay(alignment: .top) {
+                    Rectangle().fill(FTCBrand.line).frame(height: 0.5)
+                }
+                .ignoresSafeArea(edges: .bottom)
+        }
     }
 }
 

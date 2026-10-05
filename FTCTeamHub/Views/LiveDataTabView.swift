@@ -16,29 +16,31 @@ struct LiveDataTabView: View {
     @State private var section: Section = .search
 
     enum Section: String, CaseIterable, Identifiable {
-        case search = "Search", bookmarked = "Bookmarked", events = "Events", scoring = "Scoring Sim"
+        case search = "Team Search", bookmarked = "Tracked Teams", events = "Events", scouting = "Scout Reports", scoring = "Scoring Sim"
         var id: String { rawValue }
     }
 
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                Picker("Section", selection: $section) {
-                    ForEach(Section.allCases) { Text($0.rawValue).tag($0) }
-                }
-                .pickerStyle(.segmented)
-                .padding()
-
-                Divider()
-
                 switch section {
                 case .search: TeamSearchView(api: api)
                 case .bookmarked: BookmarkedTeamsView(api: api)
                 case .events: EventsBrowserView(api: api)
+                case .scouting: ScoutingTabView()
                 case .scoring: ScoringSimulatorView()
                 }
             }
-            .navigationTitle("Live FTC Data")
+            .navigationTitle(section.rawValue)
+            .toolbar {
+                ToolbarItem(placement: .principal) {
+                    Picker("Scout tools", selection: $section) {
+                        ForEach(Section.allCases) { Text($0.rawValue).tag($0) }
+                    }
+                    .pickerStyle(.menu)
+                    .accessibilityLabel("Scout tools")
+                }
+            }
         }
     }
 }
@@ -55,6 +57,7 @@ private struct TeamSearchView: View {
     @State private var isLoading = false
     @State private var errorMessage: String?
     @State private var result: FTCTeamOPR?
+    @State private var season = Calendar.current.component(.year, from: .now)
 
     private var isBookmarked: Bool {
         guard let result else { return false }
@@ -76,6 +79,15 @@ private struct TeamSearchView: View {
                     .buttonStyle(.borderedProminent)
                     .disabled(teamNumberInput.isEmpty || isLoading)
                 }
+                Picker("Season", selection: $season) {
+                    ForEach((Calendar.current.component(.year, from: .now) - 4)...Calendar.current.component(.year, from: .now), id: \.self) { year in
+                        Text(String(year)).tag(year)
+                    }
+                }
+                .onChange(of: season) {
+                    result = nil
+                    errorMessage = nil
+                }
             }
 
             if let errorMessage {
@@ -89,7 +101,7 @@ private struct TeamSearchView: View {
                     OPRBreakdownView(team: result)
 
                     NavigationLink {
-                        TeamDashboardView(teamNumber: result.number, teamName: result.name, api: api)
+                        TeamDashboardView(teamNumber: result.number, teamName: result.name, season: season, api: api)
                     } label: {
                         Label("View Full Team Dashboard", systemImage: "chart.xyaxis.line")
                     }
@@ -104,24 +116,27 @@ private struct TeamSearchView: View {
             }
 
             Section {
-                Text("Live data sourced from api.ftcscout.org/graphql.")
+                Label("Live FTCScout data · \(season)", systemImage: "antenna.radiowaves.left.and.right")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                Text("Live event data requires an internet connection. Local scouting reports remain available offline.")
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
             }
         }
         .listStyle(.insetGrouped)
     }
 
     private func search() async {
-        guard let number = Int(teamNumberInput) else {
-            errorMessage = "Enter a numeric team number."
+        guard let number = Int(teamNumberInput), number > 0 else {
+            errorMessage = "Enter a team number greater than zero."
             return
         }
         isLoading = true
         errorMessage = nil
         result = nil
         do {
-            result = try await api.fetchTeamOPR(teamNumber: number, season: 2026)
+            result = try await api.fetchTeamOPR(teamNumber: number, season: season)
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -204,7 +219,12 @@ private struct BookmarkedTeamsView: View {
             }
             ForEach(bookmarks) { team in
                 NavigationLink {
-                    TeamDashboardView(teamNumber: team.teamNumber, teamName: team.teamName, api: api)
+                    TeamDashboardView(
+                        teamNumber: team.teamNumber,
+                        teamName: team.teamName,
+                        season: Calendar.current.component(.year, from: .now),
+                        api: api
+                    )
                 } label: {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(team.teamName).font(.body.weight(.medium))
@@ -229,38 +249,74 @@ private struct BookmarkedTeamsView: View {
 private struct EventsBrowserView: View {
     let api: FTCScoutAPIServicing
     @State private var events: [FTCEventSummary] = []
-    @State private var isLoading = true
+    @State private var isLoading = false
     @State private var errorMessage: String?
+    @State private var searchText = ""
+    @State private var season = Calendar.current.component(.year, from: .now)
+
+    private var filteredEvents: [FTCEventSummary] {
+        guard !searchText.isEmpty else { return events }
+        return events.filter {
+            $0.name.localizedCaseInsensitiveContains(searchText) ||
+            $0.code.localizedCaseInsensitiveContains(searchText)
+        }
+    }
 
     var body: some View {
         List {
+            Section {
+                Picker("Season", selection: $season) {
+                    ForEach((Calendar.current.component(.year, from: .now) - 4)...(Calendar.current.component(.year, from: .now) + 1), id: \.self) { year in
+                        Text(String(year)).tag(year)
+                    }
+                }
+            }
             if isLoading {
                 ProgressView().frame(maxWidth: .infinity)
             } else if let errorMessage {
-                Text(errorMessage).font(.footnote).foregroundStyle(.red)
-            } else if events.isEmpty {
+                ContentUnavailableView {
+                    Label("Events unavailable", systemImage: "wifi.exclamationmark")
+                } description: {
+                    Text(errorMessage)
+                } actions: {
+                    Button("Try again") { Task { await loadEvents() } }
+                }
+            } else if filteredEvents.isEmpty {
                 EmptyStateView(icon: "calendar", title: "No events found",
-                               subtitle: "Try again later — the season schedule may not be published yet.",
+                               subtitle: searchText.isEmpty
+                                ? "The \(season) FTCScout schedule may not be published yet."
+                                : "No events matched “\(searchText)”.",
                                tint: .orange)
             } else {
-                ForEach(events) { event in
+                ForEach(filteredEvents) { event in
                     VStack(alignment: .leading, spacing: 2) {
                         Text(event.name).font(.body.weight(.medium))
-                        Text("\(event.start) – \(event.end)")
+                        Text("\(event.start) – \(event.end) · \(event.code)")
                             .font(.caption).foregroundStyle(.secondary)
                     }
                 }
             }
         }
         .listStyle(.plain)
-        .task {
-            do {
-                events = try await api.fetchEvents(season: 2026)
-            } catch {
-                errorMessage = error.localizedDescription
-            }
-            isLoading = false
+        .searchable(text: $searchText, prompt: "Search events or event code")
+        .refreshable { await loadEvents() }
+        .task(id: season) {
+            await loadEvents()
         }
+    }
+
+    private func loadEvents() async {
+        isLoading = true
+        errorMessage = nil
+        do {
+            let fetchedEvents = try await api.fetchEvents(season: season).sorted { $0.start < $1.start }
+            guard !Task.isCancelled else { return }
+            events = fetchedEvents
+        } catch {
+            guard !Task.isCancelled else { return }
+            errorMessage = error.localizedDescription
+        }
+        isLoading = false
     }
 }
 

@@ -69,12 +69,16 @@ struct FTCAlliancePartner: Identifiable, Hashable {
 
 enum FTCScoutAPIError: LocalizedError {
     case invalidResponse
+    case httpStatus(Int)
+    case noSeasonData(teamNumber: Int, season: Int)
     case graphQLErrors([String])
     case transport(Error)
 
     var errorDescription: String? {
         switch self {
         case .invalidResponse: return "The server returned an unreadable response."
+        case .httpStatus(let status): return "FTCScout returned HTTP \(status). Try again later."
+        case .noSeasonData(let teamNumber, let season): return "FTCScout has no OPR data for team #\(teamNumber) in the \(season) season."
         case .graphQLErrors(let messages): return messages.joined(separator: "\n")
         case .transport(let err): return err.localizedDescription
         }
@@ -107,7 +111,9 @@ final class LiveFTCScoutAPIClient: FTCScoutAPIServicing {
                                         dataKeyPath: [String]) async throws -> T {
         var request = URLRequest(url: endpoint)
         request.httpMethod = "POST"
+        request.timeoutInterval = 30
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
         request.httpBody = try JSONSerialization.data(withJSONObject: ["query": query, "variables": variables])
 
         let data: Data
@@ -118,9 +124,10 @@ final class LiveFTCScoutAPIClient: FTCScoutAPIServicing {
             throw FTCScoutAPIError.transport(error)
         }
 
-        guard let http = response as? HTTPURLResponse, 200..<300 ~= http.statusCode else {
+        guard let http = response as? HTTPURLResponse else {
             throw FTCScoutAPIError.invalidResponse
         }
+        guard 200..<300 ~= http.statusCode else { throw FTCScoutAPIError.httpStatus(http.statusCode) }
 
         guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
             throw FTCScoutAPIError.invalidResponse
@@ -128,7 +135,7 @@ final class LiveFTCScoutAPIClient: FTCScoutAPIServicing {
 
         if let errors = json["errors"] as? [[String: Any]] {
             let messages = errors.compactMap { $0["message"] as? String }
-            throw FTCScoutAPIError.graphQLErrors(messages)
+            throw FTCScoutAPIError.graphQLErrors(messages.isEmpty ? ["FTCScout reported a GraphQL error."] : messages)
         }
 
         guard var cursor: Any = json["data"] else { throw FTCScoutAPIError.invalidResponse }
@@ -173,13 +180,16 @@ final class LiveFTCScoutAPIClient: FTCScoutAPIServicing {
             variables: ["number": teamNumber, "season": season],
             dataKeyPath: ["teamByNumber"]
         )
+        guard let stats = raw.quickStats else {
+            throw FTCScoutAPIError.noSeasonData(teamNumber: raw.number, season: season)
+        }
 
         return FTCTeamOPR(
             number: raw.number,
             name: raw.name ?? "Team \(raw.number)",
-            autoOPR: raw.quickStats?.auto?.value ?? 0,
-            teleOpOPR: raw.quickStats?.dc?.value ?? 0,
-            endgameOPR: raw.quickStats?.eg?.value ?? 0
+            autoOPR: stats.auto?.value ?? 0,
+            teleOpOPR: stats.dc?.value ?? 0,
+            endgameOPR: stats.eg?.value ?? 0
         )
     }
 
@@ -189,11 +199,14 @@ final class LiveFTCScoutAPIClient: FTCScoutAPIServicing {
         try await withThrowingTaskGroup(of: FTCSeasonStat?.self) { group in
             for season in seasons {
                 group.addTask {
-                    // A season with no data throws a GraphQL error (team didn't
-                    // compete that year) — swallow that single season rather
-                    // than failing the whole multi-season fetch.
-                    guard let opr = try? await self.fetchTeamOPR(teamNumber: teamNumber, season: season) else {
-                        return nil
+                    // Missing season data is expected; transport and schema
+                    // errors must still reach the caller.
+                    let opr: FTCTeamOPR
+                    do {
+                        opr = try await self.fetchTeamOPR(teamNumber: teamNumber, season: season)
+                    } catch let error as FTCScoutAPIError {
+                        if case .noSeasonData = error { return nil }
+                        throw error
                     }
                     return FTCSeasonStat(season: season, autoOPR: opr.autoOPR,
                                           teleOpOPR: opr.teleOpOPR, endgameOPR: opr.endgameOPR)
@@ -287,6 +300,11 @@ final class LiveFTCScoutAPIClient: FTCScoutAPIServicing {
             }
         }
         return counts.map { FTCAlliancePartner(teamNumber: $0.key, matchesTogether: $0.value) }
-            .sorted { $0.matchesTogether > $1.matchesTogether }
+            .sorted {
+                if $0.matchesTogether == $1.matchesTogether {
+                    return $0.teamNumber < $1.teamNumber
+                }
+                return $0.matchesTogether > $1.matchesTogether
+            }
     }
 }

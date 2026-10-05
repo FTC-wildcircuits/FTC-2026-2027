@@ -45,4 +45,10 @@ enum NotificationScheduler {
     static func cancelReminder(for task: TaskItem) {
         UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: [task.id.uuidString])
     }
+
+    static func cancelAllReminders() {
+        let center = UNUserNotificationCenter.current()
+        center.removeAllPendingNotificationRequests()
+        center.removeAllDeliveredNotifications()
+    }
 }
