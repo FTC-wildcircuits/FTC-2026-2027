@@ -63,30 +63,6 @@ struct ResetConfirmationSheet: View {
                     }
                 }
 
-                #Preview("Reset confirmation · Light") {
-                    let container = makePreviewContainer()
-                    ResetConfirmationSheet()
-                        .modelContainer(container)
-                        .environment(AuthenticationManager(modelContext: container.mainContext))
-                        .preferredColorScheme(.light)
-                }
-
-                #Preview("Reset confirmation · Dark") {
-                    let container = makePreviewContainer()
-                    ResetConfirmationSheet()
-                        .modelContainer(container)
-                        .environment(AuthenticationManager(modelContext: container.mainContext))
-                        .preferredColorScheme(.dark)
-                }
-
-                #Preview("Reset confirmation · Accessibility") {
-                    let container = makePreviewContainer()
-                    ResetConfirmationSheet()
-                        .modelContainer(container)
-                        .environment(AuthenticationManager(modelContext: container.mainContext))
-                        .dynamicTypeSize(.accessibility5)
-                }
-
                 Section {
                     Button(role: .destructive) {
                         performWipe()
@@ -125,4 +101,28 @@ struct ResetConfirmationSheet: View {
             isWiping = false
         }
     }
+}
+
+#Preview("Reset confirmation · Light") {
+    let container = makePreviewContainer()
+    ResetConfirmationSheet()
+        .modelContainer(container)
+        .environment(AuthenticationManager(modelContext: container.mainContext))
+        .preferredColorScheme(.light)
+}
+
+#Preview("Reset confirmation · Dark") {
+    let container = makePreviewContainer()
+    ResetConfirmationSheet()
+        .modelContainer(container)
+        .environment(AuthenticationManager(modelContext: container.mainContext))
+        .preferredColorScheme(.dark)
+}
+
+#Preview("Reset confirmation · Accessibility") {
+    let container = makePreviewContainer()
+    ResetConfirmationSheet()
+        .modelContainer(container)
+        .environment(AuthenticationManager(modelContext: container.mainContext))
+        .dynamicTypeSize(.accessibility5)
 }
