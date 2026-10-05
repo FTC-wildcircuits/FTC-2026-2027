@@ -68,7 +68,7 @@ team data.
 
 ## Included features
 
-The app includes five primary navigation areas and hubs for dashboard, roster,
+The app includes five native iOS navigation tabs and hubs for dashboard, roster,
 task board, robot testing, engineering notebook/PDF export, ideas, batteries,
 checklists, searchable and editable inventory with QR check-in/out, match
 scouting with event filters/team averages/CSV export, FTCScout team and event
@@ -76,17 +76,22 @@ data, scoring simulator, real-time chat, team settings, and budget/sponsor
 tracking. The clean-slate build clears local team records once on first
 launch, starts with cloud sync off, and includes an in-app 2026–27 calendar
 for the five supplied events with a linked engineering notebook and
-persistent robot/pit readiness checklist for each. The login screen uses a
-simple Wild Circuits / Team 24211 wordmark, labeled credential fields, and a
-separate account-creation path. Member colors are shown as named, accessible
+persistent robot/pit readiness checklist for each. The login and dashboard
+use the editable team name and number from Team Profile. The dashboard's next
+event comes from the built-in 2026–27 team schedule, so it remains available
+offline instead of depending on a live event lookup. Its quick-action menu
+opens practice logs, the notebook, global search, tasks, inventory, checklists,
+and match observations. Member colors are shown as named, accessible
 choices with a clear explanation of where they appear. Authentication and
 local save failures are shown to the user instead of being silently ignored.
 Native adaptive text colors keep member and event names legible in both iOS
 appearance modes. The dashboard uses compact team-status summaries and
-reports readiness only for checks the team has actually tracked. The app has
-a five-section navigation dock and a quick practice log form that records an
-observation, follow-up test, work area, and author directly in the searchable
-engineering notebook.
+reports readiness only for checks the team has actually tracked. If the local
+database cannot be opened, the app keeps the existing store untouched, falls
+back to temporary in-memory storage for the session, and warns that new
+changes will not persist. A quick practice log records an observation,
+follow-up test, work area, and author directly in the searchable engineering
+notebook.
 Enabling cloud sync is optional and may download existing shared records;
 it also uploads local records from this device. The reset does not delete
 Firestore data. FTCScout match scores are not fabricated: scores in scouting

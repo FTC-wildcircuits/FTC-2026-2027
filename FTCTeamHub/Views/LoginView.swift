@@ -8,9 +8,11 @@
 
 import SwiftUI
 import UIKit
+import SwiftData
 
 struct LoginView: View {
     @Environment(AuthenticationManager.self) private var authManager
+    @Query private var teamSettingsList: [TeamSettings]
 
     private enum Mode {
         case signIn
@@ -34,6 +36,19 @@ struct LoginView: View {
 
     private var isSigningUp: Bool {
         mode == .signUp
+    }
+
+    private var teamName: String {
+        let name = teamSettingsList.first?.teamName.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return name.isEmpty ? "Wild Circuits" : name
+    }
+
+    private var teamNumber: Int {
+        teamSettingsList.first?.teamNumber ?? 24211
+    }
+
+    private var seasonName: String {
+        teamSettingsList.first?.seasonName ?? "2026–27"
     }
 
     private var isValid: Bool {
@@ -85,16 +100,16 @@ struct LoginView: View {
                     .fill(FTCBrand.orange)
                     .frame(width: 3, height: 27)
                 VStack(alignment: .leading, spacing: 3) {
-                    Text("WILD CIRCUITS")
+                    Text(teamName.uppercased())
                         .font(.system(size: 12, weight: .bold, design: .rounded))
                         .tracking(1.1)
-                    Text("FIRST TECH CHALLENGE  /  TEAM 24211")
+                    Text("FIRST TECH CHALLENGE  /  TEAM \(teamNumber)")
                         .font(.system(size: 9, weight: .medium, design: .monospaced))
                         .tracking(0.15)
                         .foregroundStyle(.secondary)
                 }
                 Spacer(minLength: 6)
-                Text("2026–27")
+                Text(seasonName)
                     .font(.system(size: 10, weight: .medium, design: .monospaced))
                     .foregroundStyle(.secondary)
             }

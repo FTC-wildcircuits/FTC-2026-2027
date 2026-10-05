@@ -12,20 +12,18 @@ import SwiftData
 struct DashboardTabView: View {
     @Environment(AuthenticationManager.self) private var authManager
     @Environment(TabRouter.self) private var router
-    @Environment(\.ftcScoutAPI) private var api
 
     @Query private var allTasks: [TaskItem]
     @Query private var batteries: [Battery]
     @Query private var inventoryItems: [InventoryItem]
     @Query private var testRuns: [TestRunRecord]
     @Query private var scoutingReports: [ScoutingReport]
+    @Query private var notebookEntries: [NotebookEntry]
+    @Query private var ideas: [Idea]
+    @Query private var teamSettingsList: [TeamSettings]
     @Query(sort: \ActivityEvent.timestamp, order: .reverse) private var activity: [ActivityEvent]
     @Query(sort: \ChecklistRun.timestamp, order: .reverse) private var checklistRuns: [ChecklistRun]
 
-    @State private var nextEvent: FTCEventSummary?
-    @State private var daysUntilEvent: Int?
-    @State private var isLoadingEvent = true
-    @State private var eventLoadError: String?
     @State private var isPresentingSearch = false
     @State private var isPresentingQuickLog = false
 
@@ -56,6 +54,12 @@ struct DashboardTabView: View {
         myOpenTasks.filter { ($0.deadline ?? .distantFuture) < .now }
     }
 
+    private var hasOverdueTeamTasks: Bool {
+        allTasks.contains {
+            $0.status != .done && ($0.deadline ?? .distantFuture) < .now
+        }
+    }
+
     private var batteriesNeedingAttention: [Battery] {
         batteries.filter { $0.status == .dead || $0.cycleCount > 40 }
     }
@@ -64,8 +68,44 @@ struct DashboardTabView: View {
         inventoryItems.filter { $0.isLowStock || $0.needsMaintenance }
     }
 
-    private var todaysChecklist: ChecklistRun? {
-        checklistRuns.first { Calendar.current.isDateInToday($0.timestamp) }
+    private var todaysPreFlightChecklist: ChecklistRun? {
+        checklistRuns.first {
+            $0.type == .preFlight && Calendar.current.isDateInToday($0.timestamp)
+        }
+    }
+
+    private var hasTrackedPreFlightChecklist: Bool {
+        checklistRuns.contains { $0.type == .preFlight }
+    }
+
+    private var nextTeamEvent: FTCEvent? {
+        let today = Calendar.current.startOfDay(for: .now)
+        return FTCEvent.all.first { Calendar.current.startOfDay(for: $0.date) >= today }
+    }
+
+    private var nextEventCountdown: String? {
+        guard let nextTeamEvent,
+              let days = Calendar.current.dateComponents(
+                [.day],
+                from: Calendar.current.startOfDay(for: .now),
+                to: Calendar.current.startOfDay(for: nextTeamEvent.date)
+              ).day else { return nil }
+        if days == 0 { return "Today" }
+        if days == 1 { return "Tomorrow" }
+        return "In \(days) days"
+    }
+
+    private var teamName: String {
+        let name = teamSettingsList.first?.teamName.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return name.isEmpty ? "Wild Circuits" : name
+    }
+
+    private var teamNumber: Int {
+        teamSettingsList.first?.teamNumber ?? 24211
+    }
+
+    private var seasonName: String {
+        teamSettingsList.first?.seasonName ?? "2026–27"
     }
 
     private var insights: [Insight] {
@@ -82,10 +122,12 @@ struct DashboardTabView: View {
 
     private var readinessFactors: [ReadinessFactor] {
         [
-            ReadinessFactor(label: "Open tasks on schedule", isGood: overdueTasks.isEmpty, isTracked: !allTasks.isEmpty),
+            ReadinessFactor(label: "Open tasks on schedule", isGood: !hasOverdueTeamTasks, isTracked: !allTasks.isEmpty),
             ReadinessFactor(label: "Batteries healthy", isGood: batteriesNeedingAttention.isEmpty, isTracked: !batteries.isEmpty),
             ReadinessFactor(label: "Inventory in good shape", isGood: inventoryNeedingAttention.isEmpty, isTracked: !inventoryItems.isEmpty),
-            ReadinessFactor(label: "Pre-flight checklist done today", isGood: todaysChecklist != nil, isTracked: todaysChecklist != nil)
+            ReadinessFactor(label: "Pre-flight checklist done today",
+                            isGood: todaysPreFlightChecklist?.allChecked == true,
+                            isTracked: hasTrackedPreFlightChecklist)
         ]
     }
 
@@ -119,7 +161,7 @@ struct DashboardTabView: View {
                     sectionHeading("Needs attention", detail: "Equipment and preparation")
                     if !batteriesNeedingAttention.isEmpty { batteryAlertCard }
                     if !inventoryNeedingAttention.isEmpty { inventoryAlertCard }
-                    if todaysChecklist == nil { checklistNudgeCard }
+                    if todaysPreFlightChecklist?.allChecked != true { checklistNudgeCard }
                     sectionHeading("Practice insights", detail: "Based on your recorded data")
                     insightsSection
                     sectionHeading("Recent activity", detail: "Latest team updates")
@@ -130,7 +172,7 @@ struct DashboardTabView: View {
                 .padding(.bottom, 24)
             }
             .background(Color(uiColor: .systemGroupedBackground).ignoresSafeArea())
-            .navigationTitle("Overview")
+            .navigationTitle("Home")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItemGroup(placement: .topBarTrailing) {
@@ -150,6 +192,26 @@ struct DashboardTabView: View {
                             Label("Open engineering notebook", systemImage: "book.closed")
                         }
                         Button {
+                            router.selection = .scoutingReports
+                        } label: {
+                            Label("Record match observation", systemImage: "scope")
+                        }
+                        Button {
+                            router.selection = .tasks
+                        } label: {
+                            Label("Open team tasks", systemImage: "checklist")
+                        }
+                        Button {
+                            router.selection = .inventory
+                        } label: {
+                            Label("Open pit inventory", systemImage: "shippingbox")
+                        }
+                        Button {
+                            router.selection = .checklists
+                        } label: {
+                            Label("Run a pit checklist", systemImage: "checklist")
+                        }
+                        Button {
                             isPresentingSearch = true
                         } label: {
                             Label("Search team records", systemImage: "magnifyingglass")
@@ -166,8 +228,6 @@ struct DashboardTabView: View {
             }
             .sheet(isPresented: $isPresentingSearch) { GlobalSearchView() }
             .sheet(isPresented: $isPresentingQuickLog) { QuickPracticeLogSheet() }
-            .task { await loadNextEvent() }
-            .refreshable { await loadNextEvent() }
         }
     }
 
@@ -177,9 +237,8 @@ struct DashboardTabView: View {
         VStack(alignment: .leading, spacing: 9) {
             HStack(spacing: 7) {
                 Circle().fill(FTCBrand.orange).frame(width: 7, height: 7)
-                Text("WILD CIRCUITS     /     2026—27")
-                    .font(.system(size: 10, weight: .bold, design: .monospaced))
-                    .tracking(0.6)
+                Text(teamName)
+                    .font(.subheadline.weight(.semibold))
                     .foregroundStyle(.secondary)
                 Spacer()
                 if let user = authManager.currentUser {
@@ -191,10 +250,10 @@ struct DashboardTabView: View {
                 }
             }
             Text(greeting)
-                .font(.system(size: 30, weight: .bold))
+                .font(.system(size: 30, weight: .bold, design: .rounded))
                 .tracking(-0.8)
                 .foregroundStyle(.primary)
-            Text("Team 24211  ·  \(Date.now.formatted(.dateTime.weekday(.wide).month(.wide).day()))")
+            Text("FTC \(seasonName)  ·  Team \(teamNumber)  ·  \(Date.now.formatted(.dateTime.weekday(.wide).month(.wide).day()))")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
         }
@@ -263,24 +322,28 @@ struct DashboardTabView: View {
                     .foregroundStyle(FTCBrand.accentText)
                     .frame(width: 40, height: 40)
                     .background(FTCBrand.accentText.opacity(0.09), in: RoundedRectangle(cornerRadius: 11))
-
                 VStack(alignment: .leading, spacing: 2) {
-                    if isLoadingEvent {
-                        Text("Checking upcoming events…").font(.subheadline).foregroundStyle(.secondary)
-                    } else if let event = nextEvent, let days = daysUntilEvent {
-                        Text(event.name)
+                    if let event = nextTeamEvent {
+                        Text(event.title)
                             .font(.subheadline.weight(.semibold))
                             .foregroundStyle(.primary)
                             .lineLimit(2)
-                        Text(days == 0 ? "Today" : days == 1 ? "Tomorrow" : "In \(days) days")
-                            .font(.caption).foregroundStyle(.secondary)
-                    } else if let eventLoadError {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Upcoming events unavailable").font(.subheadline.weight(.medium))
-                            Text(eventLoadError).font(.caption).foregroundStyle(.secondary).lineLimit(2)
-                        }
+                        Text([nextEventCountdown,
+                              event.date.formatted(.dateTime.weekday(.wide).month(.abbreviated).day()),
+                              event.time, event.venue]
+                            .compactMap { $0 }
+                            .joined(separator: " · "))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(2)
+                            .fixedSize(horizontal: false, vertical: true)
                     } else {
-                        Text("No upcoming events published").font(.subheadline).foregroundStyle(.secondary)
+                        Text("Season schedule complete")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(.primary)
+                        Text("No more team events are listed.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
                     }
                 }
                 Spacer()
@@ -296,42 +359,6 @@ struct DashboardTabView: View {
             .padding(14)
         }
         .groupBoxStyle(DashboardGroupBoxStyle())
-    }
-
-    private func loadNextEvent() async {
-        isLoadingEvent = true
-        eventLoadError = nil
-        nextEvent = nil
-        daysUntilEvent = nil
-        do {
-            let season = Calendar.current.component(.year, from: .now)
-            let events = try await api.fetchEvents(season: season)
-            let formatter = DateFormatter()
-            formatter.dateFormat = "yyyy-MM-dd"
-            formatter.timeZone = TimeZone(identifier: "UTC")
-
-            let upcoming = events.compactMap { event -> (FTCEventSummary, Date)? in
-                guard let date = formatter.date(from: String(event.start.prefix(10))) else { return nil }
-                return (event, date)
-            }
-            .filter { $0.1 >= Calendar.current.startOfDay(for: .now) }
-            .sorted { $0.1 < $1.1 }
-
-            if !events.isEmpty && upcoming.isEmpty &&
-                events.allSatisfy({ formatter.date(from: String($0.start.prefix(10))) == nil }) {
-                eventLoadError = "FTCScout returned event dates in an unexpected format."
-            }
-            if let soonest = upcoming.first {
-                nextEvent = soonest.0
-                daysUntilEvent = Calendar.current.dateComponents(
-                    [.day], from: Calendar.current.startOfDay(for: .now),
-                    to: Calendar.current.startOfDay(for: soonest.1)
-                ).day
-            }
-        } catch {
-            eventLoadError = error.localizedDescription
-        }
-        isLoadingEvent = false
     }
 
     // MARK: - Stat grid
@@ -351,14 +378,15 @@ struct DashboardTabView: View {
             ) { router.selection = .pitOps }
 
             DashboardStatCard(
-                title: "Notebook & ideas", value: "\(activity.filter { $0.kind == .notebookEntry || $0.kind == .ideaPosted }.count)",
-                subtitle: "this season", subtitleColor: .secondary, icon: "book.closed"
-            ) { router.selection = .notebook }
+                title: "Notebook & ideas", value: "\(notebookEntries.count + ideas.count)",
+                subtitle: "\(notebookEntries.count) notes · \(ideas.count) ideas",
+                subtitleColor: .secondary, icon: "book.closed"
+            ) { router.selection = .workHome }
 
             DashboardStatCard(
                 title: "Match reports", value: "\(scoutingReports.count)", subtitle: "team observations", subtitleColor: .secondary,
                 icon: "scope"
-            ) { router.selection = .liveData }
+            ) { router.selection = .scoutingReports }
         }
     }
 
@@ -418,11 +446,13 @@ struct DashboardTabView: View {
     private var checklistNudgeCard: some View {
         GroupBox {
             Button {
-                router.selection = .pitOps
+                router.selection = .checklists
             } label: {
                 HStack {
                     Image(systemName: "checklist").foregroundStyle(.blue)
-                    Text("No pre-flight checklist completed today")
+                    Text(todaysPreFlightChecklist == nil
+                         ? "No pre-flight checklist completed today"
+                         : "Finish all pre-flight checks before practice")
                         .font(.subheadline)
                         .foregroundStyle(.primary)
                     Spacer()

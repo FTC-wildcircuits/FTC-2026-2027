@@ -1,9 +1,7 @@
 # project.yml
 # XcodeGen spec.
 #
-# Re-enabled the custom LaunchScreen.storyboard (navy background, SF
-# Symbol badge, team name, accent bar). Also added NSFaceIDUsageDescription
-# for the new Face ID app-lock feature.
+# XcodeGen specification for the iOS app target and its launch resources.
 
 name: FTCTeamHub
 options:
@@ -48,7 +46,6 @@ targets:
           - UIInterfaceOrientationPortrait
         UIRequiresFullScreen: true
         NSCameraUsageDescription: "FTC Team Hub uses the camera to scan QR labels on inventory items for quick check-in and check-out."
-        NSFaceIDUsageDescription: "FTC Team Hub uses Face ID to keep team data private."
 
 schemes:
   FTCTeamHub:

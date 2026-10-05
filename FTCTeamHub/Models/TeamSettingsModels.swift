@@ -19,8 +19,8 @@ final class TeamSettings {
     var seasonName: String
 
     init(id: UUID = UUID(),
-         teamNumber: Int = 0,
-         teamName: String = "My FTC Team",
+         teamNumber: Int = 24211,
+         teamName: String = "Wild Circuits",
          rookieYear: Int = Calendar.current.component(.year, from: .now),
          seasonName: String = "2026-2027") {
         self.id = id

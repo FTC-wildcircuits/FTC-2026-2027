@@ -12,6 +12,7 @@ import UIKit
 
 struct LiveDataTabView: View {
     @Environment(\.ftcScoutAPI) private var api
+    @Environment(TabRouter.self) private var router
     @State private var section: Section = .search
 
     enum Section: String, CaseIterable, Identifiable {
@@ -40,6 +41,19 @@ struct LiveDataTabView: View {
                     .accessibilityLabel("Scout tools")
                 }
             }
+            .onAppear(perform: syncSectionWithRouter)
+            .onChange(of: router.selection) { _, _ in syncSectionWithRouter() }
+            .onChange(of: section) { _, selection in
+                router.selection = selection == .scouting ? .scoutingReports : .liveData
+            }
+        }
+    }
+
+    private func syncSectionWithRouter() {
+        switch router.selection {
+        case .scoutingReports: section = .scouting
+        case .liveData: section = .search
+        default: break
         }
     }
 }
@@ -322,8 +336,10 @@ private struct EventsBrowserView: View {
 #Preview {
     let container = makePreviewContainer()
     let authManager = AuthenticationManager(modelContext: container.mainContext)
+    let router = TabRouter()
     LiveDataTabView()
         .modelContainer(container)
         .environment(authManager)
+        .environment(router)
         .environment(\.ftcScoutAPI, LiveFTCScoutAPIClient())
 }

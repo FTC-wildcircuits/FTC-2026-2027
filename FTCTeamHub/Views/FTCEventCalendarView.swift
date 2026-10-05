@@ -1,7 +1,7 @@
 import SwiftUI
 import SwiftData
 
-private struct FTCEvent: Identifiable, Hashable {
+struct FTCEvent: Identifiable, Hashable {
     let id: String
     let title: String
     let kind: String
@@ -56,6 +56,7 @@ private struct FTCEvent: Identifiable, Hashable {
 
 struct FTCEventCalendarView: View {
     @Environment(TabRouter.self) private var router
+    @Query private var teamSettingsList: [TeamSettings]
     @State private var displayedMonth = Self.initialMonth
     @State private var selectedDate = Self.initialDate
     @State private var selectedEvent: FTCEvent?
@@ -78,6 +79,15 @@ struct FTCEventCalendarView: View {
 
     private var monthTitle: String {
         monthStart.formatted(.dateTime.month(.wide).year())
+    }
+
+    private var teamName: String {
+        let name = teamSettingsList.first?.teamName.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return name.isEmpty ? "Wild Circuits" : name
+    }
+
+    private var seasonName: String {
+        teamSettingsList.first?.seasonName ?? "2026–27"
     }
 
     private var monthDays: [Date?] {
@@ -145,11 +155,11 @@ struct FTCEventCalendarView: View {
         FTCBrandCard {
             HStack(alignment: .center, spacing: 16) {
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("WILD CIRCUITS  ·  FTC 2026–27")
+                    Text("\(teamName)  ·  FTC \(seasonName)")
                         .font(.system(.caption2, design: .rounded, weight: .bold))
                         .tracking(1.2)
                         .foregroundStyle(FTCBrand.cyan)
-                    Text("Show up.\nBuild together.")
+                    Text("Team event\nschedule")
                         .font(.system(.title, design: .rounded, weight: .bold))
                         .foregroundStyle(.white)
                         .fixedSize(horizontal: false, vertical: true)

@@ -9,13 +9,17 @@
 import SwiftUI
 import SwiftData
 import FirebaseCore
+import OSLog
 
 @main
 struct FTCTeamHubApp: App {
 
-    let container: ModelContainer = Self.makeModelContainer()
+    let container: ModelContainer
+    private let persistenceWarning: String?
 
-    private static func makeModelContainer() -> ModelContainer {
+    private static let logger = Logger(subsystem: "com.ftcteamhub.app", category: "Persistence")
+
+    private static func makeModelContainer(inMemory: Bool = false) throws -> ModelContainer {
         let schema = Schema([
             AppUser.self, TaskItem.self, NotebookEntry.self,
             TestRunRecord.self, Idea.self, ActivityEvent.self, TrackedTeam.self,
@@ -23,31 +27,8 @@ struct FTCTeamHubApp: App {
             TeamSettings.self, Sponsor.self, BudgetExpense.self,
             ScoringElement.self, ScoutingReport.self
         ])
-        let config = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
-
-        if let container = try? ModelContainer(for: schema, configurations: [config]) {
-            return container
-        }
-
-        // The on-disk store couldn't be opened — most commonly an
-        // incompatible schema left over from an older build. Remove it and
-        // start fresh rather than crashing on every future launch. Cloud
-        // sync (when enabled) will repopulate team records afterward.
-        let storeURL = config.url
-        for suffix in ["", "-shm", "-wal"] {
-            try? FileManager.default.removeItem(at: URL(fileURLWithPath: storeURL.path + suffix))
-        }
-        if let container = try? ModelContainer(for: schema, configurations: [config]) {
-            return container
-        }
-
-        // Last resort: keep the app usable for this session even without
-        // local persistence, rather than refusing to launch at all.
-        let memoryConfig = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
-        if let container = try? ModelContainer(for: schema, configurations: [memoryConfig]) {
-            return container
-        }
-        fatalError("Unable to create a SwiftData model container, even in memory.")
+        let config = ModelConfiguration(schema: schema, isStoredInMemoryOnly: inMemory)
+        return try ModelContainer(for: schema, configurations: [config])
     }
 
     private let scoutAPI: FTCScoutAPIServicing = LiveFTCScoutAPIClient()
@@ -58,11 +39,23 @@ struct FTCTeamHubApp: App {
 
     init() {
         FirebaseApp.configure()
+        do {
+            container = try Self.makeModelContainer()
+            persistenceWarning = nil
+        } catch {
+            Self.logger.error("Persistent team storage could not be opened; using temporary in-memory storage.")
+            do {
+                container = try Self.makeModelContainer(inMemory: true)
+                persistenceWarning = error.localizedDescription
+            } catch {
+                fatalError("Unable to create a SwiftData model container: \(error.localizedDescription)")
+            }
+        }
     }
 
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            ContentView(persistenceWarning: persistenceWarning)
                 .environment(\.ftcScoutAPI, scoutAPI)
                 .environment(\.syncService, syncService)
                 .environment(\.chatService, chatService)
@@ -108,6 +101,8 @@ extension EnvironmentValues {
 // MARK: - Root router
 
 struct ContentView: View {
+    let persistenceWarning: String?
+
     @Environment(\.modelContext) private var modelContext
     @Environment(\.syncService) private var syncService
     @State private var authManager: AuthenticationManager?
@@ -150,6 +145,27 @@ struct ContentView: View {
             }
         }
         .animation(.easeInOut(duration: 0.2), value: authManager?.currentUser?.id)
+        .safeAreaInset(edge: .top, spacing: 0) {
+            if let persistenceWarning {
+                HStack(alignment: .top, spacing: 10) {
+                    Image(systemName: "externaldrive.badge.exclamationmark")
+                        .foregroundStyle(.orange)
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("Changes are temporary on this device")
+                            .font(.subheadline.weight(.semibold))
+                        Text("The existing database was left untouched. New changes are temporary. Check available storage or install a compatible app build before relying on local records. \(persistenceWarning)")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 11)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color.orange.opacity(0.12))
+                .accessibilityElement(children: .combine)
+            }
+        }
         .onAppear(perform: prepareWorkspace)
         .onChange(of: cloudSyncEnabled) { _, enabled in
             if enabled {
@@ -165,7 +181,9 @@ struct ContentView: View {
     private func prepareWorkspace() {
         guard authManager == nil else { return }
         do {
-            if !cleanSlateApplied {
+            if persistenceWarning != nil {
+                cloudSyncEnabled = false
+            } else if !cleanSlateApplied {
                 cloudSyncEnabled = false
                 try DataResetManager.wipeAllLocalData(context: modelContext, includeRoster: true)
                 cleanSlateApplied = true
@@ -193,69 +211,25 @@ struct MainTabView: View {
         TabView(selection: Binding(get: { router.rootSelection }, set: { router.selectRoot($0) })) {
             DashboardTabView()
                 .tag(RootTab.dashboard)
-                .tabItem { Label("Dashboard", systemImage: "square.grid.2x2.fill") }
+                .tabItem { Label(RootTab.dashboard.title, systemImage: RootTab.dashboard.systemImage) }
 
             WorkHubTabView()
                 .tag(RootTab.work)
-                .tabItem { Label("Build", systemImage: "hammer.fill") }
+                .tabItem { Label(RootTab.work.title, systemImage: RootTab.work.systemImage) }
 
             PitOpsTabView()
                 .tag(RootTab.pitOps)
-                .tabItem { Label("Pit Ops", systemImage: "wrench.and.screwdriver.fill") }
+                .tabItem { Label(RootTab.pitOps.title, systemImage: RootTab.pitOps.systemImage) }
 
             LiveDataTabView()
                 .tag(RootTab.scouting)
-                .tabItem { Label("Scout", systemImage: "antenna.radiowaves.left.and.right") }
+                .tabItem { Label(RootTab.scouting.title, systemImage: RootTab.scouting.systemImage) }
 
             TeamHubTabView()
                 .tag(RootTab.team)
-                .tabItem { Label("Team", systemImage: "gearshape.fill") }
+                .tabItem { Label(RootTab.team.title, systemImage: RootTab.team.systemImage) }
         }
         .environment(router)
-        .toolbar(.hidden, for: .tabBar)
-        .safeAreaInset(edge: .bottom, spacing: 0) {
-            TeamTabDock(selection: router.rootSelection, select: router.selectRoot)
-        }
-    }
-}
-
-private struct TeamTabDock: View {
-    let selection: RootTab
-    let select: (RootTab) -> Void
-
-    var body: some View {
-        HStack(spacing: 4) {
-            ForEach(RootTab.allCases) { tab in
-                Button {
-                    select(tab)
-                } label: {
-                    VStack(spacing: 5) {
-                        Image(systemName: tab.systemImage)
-                            .font(.system(size: 18, weight: selection == tab ? .semibold : .regular))
-                            .frame(height: 22)
-                        Text(tab.title)
-                            .font(.system(size: 10, weight: selection == tab ? .semibold : .medium))
-                    }
-                    .foregroundStyle(selection == tab ? FTCBrand.accentText : Color.secondary)
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 52)
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(tab.title)
-                .accessibilityAddTraits(selection == tab ? .isSelected : [])
-            }
-        }
-        .padding(.horizontal, 12)
-        .padding(.top, 5)
-        .padding(.bottom, 2)
-        .background {
-            Color(uiColor: .systemBackground)
-                .overlay(alignment: .top) {
-                    Rectangle().fill(FTCBrand.line).frame(height: 0.5)
-                }
-                .ignoresSafeArea(edges: .bottom)
-        }
     }
 }
 

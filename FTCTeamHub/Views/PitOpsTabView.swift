@@ -38,13 +38,17 @@ struct PitOpsTabView: View {
                 }
             }
             .navigationTitle("Pit Ops")
-            .onChange(of: router.selection) {
-                if router.selection == .inventory {
-                    section = .inventory
-                } else if router.selection == .pitOps {
-                    section = .batteries
-                }
-            }
+            .onAppear(perform: syncSectionWithRouter)
+            .onChange(of: router.selection) { _, _ in syncSectionWithRouter() }
+        }
+    }
+
+    private func syncSectionWithRouter() {
+        switch router.selection {
+        case .inventory: section = .inventory
+        case .checklists: section = .checklists
+        case .pitOps: section = .batteries
+        default: break
         }
     }
 }
