@@ -2,9 +2,7 @@
 //  ResetConfirmationSheet.swift
 //  FTCTeamHub
 //
-//  A hidden gesture that reveals the "Reset App Data" flow after seven
-//  taps within three seconds. Wired to the version label in the About
-//  screen (TeamTabView.swift).
+//  Explicitly confirmed local-data reset flow.
 //
 
 import SwiftUI
@@ -54,9 +52,15 @@ struct ResetConfirmationSheet: View {
                     }
                 }
 
+                if let resetError {
+                    Section {
+                        Text(resetError).font(.footnote).foregroundStyle(.red)
+                    }
+                }
+
                 #Preview("Reset confirmation · Light") {
                     let container = makePreviewContainer()
-                    return ResetConfirmationSheet()
+                    ResetConfirmationSheet()
                         .modelContainer(container)
                         .environment(AuthenticationManager(modelContext: container.mainContext))
                         .preferredColorScheme(.light)
@@ -64,7 +68,7 @@ struct ResetConfirmationSheet: View {
 
                 #Preview("Reset confirmation · Dark") {
                     let container = makePreviewContainer()
-                    return ResetConfirmationSheet()
+                    ResetConfirmationSheet()
                         .modelContainer(container)
                         .environment(AuthenticationManager(modelContext: container.mainContext))
                         .preferredColorScheme(.dark)
@@ -72,15 +76,10 @@ struct ResetConfirmationSheet: View {
 
                 #Preview("Reset confirmation · Accessibility") {
                     let container = makePreviewContainer()
-                    return ResetConfirmationSheet()
+                    ResetConfirmationSheet()
                         .modelContainer(container)
                         .environment(AuthenticationManager(modelContext: container.mainContext))
                         .dynamicTypeSize(.accessibility5)
-                }
-                if let resetError {
-                    Section {
-                        Text(resetError).font(.footnote).foregroundStyle(.red)
-                    }
                 }
 
                 Section {

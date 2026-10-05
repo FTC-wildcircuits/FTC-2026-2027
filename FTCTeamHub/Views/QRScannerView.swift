@@ -146,9 +146,9 @@ struct QRCheckInOutView: View {
                 .background(.regularMaterial, in: RoundedRectangle(cornerRadius: FTCDesign.cardRadius, style: .continuous))
                 .padding(.bottom, 40)
             }
-            .sensoryFeedback(.success, trigger: scannedItem?.id)
-            .sensoryFeedback(.error, trigger: scanErrorMessage)
         }
+        .sensoryFeedback(.success, trigger: scannedItem?.id)
+        .sensoryFeedback(.error, trigger: scanErrorMessage)
     }
 
     private func handleScan(_ payload: String) {

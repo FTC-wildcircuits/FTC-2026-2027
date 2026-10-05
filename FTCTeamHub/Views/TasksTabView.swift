@@ -45,9 +45,14 @@ struct TasksTabView: View {
 
     var myTasks: [TaskItem] {
         guard let uid = authManager.currentUser?.id else { return [] }
-        return allTasks
-            .filter { $0.assignedToID == uid && $0.status != .done }
-            .sorted { ($0.deadline ?? .distantFuture) < ($1.deadline ?? .distantFuture) }
+        let assignedTasks = allTasks.filter { task in
+            task.assignedToID == uid && task.status != .done
+        }
+        return assignedTasks.sorted { firstTask, secondTask in
+            let firstDeadline = firstTask.deadline ?? .distantFuture
+            let secondDeadline = secondTask.deadline ?? .distantFuture
+            return firstDeadline < secondDeadline
+        }
     }
 
     var allTags: [String] {
