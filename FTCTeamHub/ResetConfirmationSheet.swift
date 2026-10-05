@@ -8,16 +8,6 @@
 import SwiftUI
 import SwiftData
 
-private struct ResetConfirmationToolbar: ToolbarContent {
-    let onCancel: () -> Void
-
-    var body: some ToolbarContent {
-        ToolbarItem(placement: .cancellationAction) {
-            Button("Cancel", action: onCancel)
-        }
-    }
-}
-
 struct ResetConfirmationSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var context
@@ -42,6 +32,11 @@ struct ResetConfirmationSheet: View {
                     Text("This permanently deletes all team records and accounts stored on this device. Shared Firestore records are not deleted.")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
+                }
+
+                Section {
+                    Button("Cancel") { dismiss() }
+                        .frame(maxWidth: .infinity)
                 }
 
                 Section {
@@ -106,9 +101,6 @@ struct ResetConfirmationSheet: View {
                 }
             }
             .navigationTitle("Reset App Data")
-            .toolbar {
-                ResetConfirmationToolbar { dismiss() }
-            }
         }
         .interactiveDismissDisabled(isWiping)
         .sensoryFeedback(.success, trigger: resultMessage)
