@@ -96,9 +96,11 @@ struct ResetConfirmationSheet: View {
                 }
             }
             .navigationTitle("Reset App Data")
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
-            }
+            .toolbar(content: {
+                ToolbarItemGroup(placement: ToolbarItemPlacement.cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                }
+            })
         }
         .interactiveDismissDisabled(isWiping)
         .sensoryFeedback(.success, trigger: resultMessage)

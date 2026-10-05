@@ -56,46 +56,16 @@ struct TasksTabView: View {
     }
 
     var allTags: [String] {
-        Array(Set(allTasks.flatMap(\.tags))).sorted()
+        var uniqueTags = Set<String>()
+        for task in allTasks {
+            uniqueTags.formUnion(task.tags)
+        }
+        return uniqueTags.sorted()
     }
 
     var body: some View {
         NavigationStack {
-            VStack(spacing: 0) {
-                Picker("View", selection: $viewMode) {
-                    ForEach(ViewMode.allCases) { Text($0.rawValue).tag($0) }
-                }
-                .pickerStyle(.segmented)
-                .padding([.horizontal, .top])
-
-                if viewMode == .board && !allTags.isEmpty {
-                    TagFilterBar(tags: allTags, selected: $filterTag)
-                }
-
-                Divider().padding(.top, 8)
-
-                switch viewMode {
-                case .myTasks: MyTasksList(tasks: myTasks, onComplete: completeTask)
-                case .board: KanbanBoard(tasks: filteredBoardTasks, onComplete: completeTask)
-                case .calendar: TaskCalendarView(tasks: allTasks)
-                }
-            }
-            .safeAreaInset(edge: .bottom, spacing: 0) {
-                if let completedTask {
-                    HStack(spacing: FTCDesign.space12) {
-                        Label("Task completed", systemImage: "checkmark.circle.fill")
-                            .foregroundStyle(.primary)
-                        Spacer(minLength: FTCDesign.space8)
-                        Button("Undo") { undoCompletion() }
-                            .fontWeight(.semibold)
-                            .frame(minWidth: FTCDesign.minimumHitTarget, minHeight: FTCDesign.minimumHitTarget)
-                    }
-                    .padding(.horizontal, FTCDesign.space16)
-                    .background(.regularMaterial)
-                    .transition(.opacity)
-                    .accessibilityLiveRegion(.polite)
-                }
-            }
+            taskContent
             .navigationTitle("Tasks")
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {
@@ -117,20 +87,71 @@ struct TasksTabView: View {
             }
             .task(id: completedTask?.id) {
                 guard let taskID = completedTask?.id else { return }
-                do {
-                    try await Task.sleep(for: .seconds(5))
-                } catch is CancellationError {
-                    return
-                } catch {
-                    return
-                }
-                if completedTask?.id == taskID {
-                    withAnimation(reduceMotion ? .easeOut(duration: 0.12) : .snappy(duration: 0.24)) {
-                        completedTask = nil
-                    }
-                }
+                await expireCompletionUndo(for: taskID)
             }
             .sensoryFeedback(.success, trigger: taskCompletionFeedbackCount)
+        }
+    }
+
+    private var taskContent: some View {
+        VStack(spacing: 0) {
+            Picker("View", selection: $viewMode) {
+                ForEach(ViewMode.allCases) { Text($0.rawValue).tag($0) }
+            }
+            .pickerStyle(.segmented)
+            .padding([.horizontal, .top])
+
+            if viewMode == .board && !allTags.isEmpty {
+                TagFilterBar(tags: allTags, selected: $filterTag)
+            }
+
+            Divider().padding(.top, 8)
+            selectedTaskView
+        }
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            completionUndoBanner
+        }
+    }
+
+    @ViewBuilder
+    private var selectedTaskView: some View {
+        switch viewMode {
+        case .myTasks:
+            MyTasksList(tasks: myTasks, onComplete: completeTask)
+        case .board:
+            KanbanBoard(tasks: filteredBoardTasks, onComplete: completeTask)
+        case .calendar:
+            TaskCalendarView(tasks: allTasks)
+        }
+    }
+
+    @ViewBuilder
+    private var completionUndoBanner: some View {
+        if completedTask != nil {
+            HStack(spacing: FTCDesign.space12) {
+                Label("Task completed", systemImage: "checkmark.circle.fill")
+                    .foregroundStyle(.primary)
+                Spacer(minLength: FTCDesign.space8)
+                Button("Undo") { undoCompletion() }
+                    .fontWeight(.semibold)
+                    .frame(minWidth: FTCDesign.minimumHitTarget, minHeight: FTCDesign.minimumHitTarget)
+            }
+            .padding(.horizontal, FTCDesign.space16)
+            .background(.regularMaterial)
+            .transition(.opacity)
+            .accessibilityLiveRegion(.polite)
+        }
+    }
+
+    private func expireCompletionUndo(for taskID: UUID) async {
+        do {
+            try await Task.sleep(for: .seconds(5))
+        } catch {
+            return
+        }
+        guard completedTask?.id == taskID else { return }
+        withAnimation(reduceMotion ? .easeOut(duration: 0.12) : .snappy(duration: 0.24)) {
+            completedTask = nil
         }
     }
 
