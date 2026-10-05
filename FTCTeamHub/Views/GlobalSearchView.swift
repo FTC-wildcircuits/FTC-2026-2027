@@ -66,7 +66,7 @@ struct GlobalSearchView: View {
                 if searchText.isEmpty {
                     EmptyStateView(icon: "magnifyingglass", title: "Search everything",
                                    subtitle: "Find tasks, notebook entries, ideas, and inventory items all at once.",
-                                   tint: .blue)
+                                   tint: .accentColor)
                         .listRowSeparator(.hidden)
                 } else if !hasAnyResults {
                     EmptyStateView(icon: "questionmark.circle", title: "No results",
@@ -76,7 +76,7 @@ struct GlobalSearchView: View {
                     if !filteredTasks.isEmpty {
                         Section("Tasks") {
                             ForEach(filteredTasks) { task in
-                                resultRow(icon: "checklist", title: task.title, subtitle: task.assignedToName, tint: .blue) {
+                                resultRow(icon: "checklist", title: task.title, subtitle: task.assignedToName, tint: .accentColor) {
                                     router.selection = .tasks
                                     dismiss()
                                 }
@@ -86,7 +86,7 @@ struct GlobalSearchView: View {
                     if !filteredNotebook.isEmpty {
                         Section("Notebook") {
                             ForEach(filteredNotebook) { entry in
-                                resultRow(icon: "book.closed", title: entry.title, subtitle: entry.authorName, tint: .purple) {
+                                resultRow(icon: "book.closed", title: entry.title, subtitle: entry.authorName, tint: .accentColor) {
                                     router.selection = .notebook
                                     dismiss()
                                 }
@@ -96,7 +96,7 @@ struct GlobalSearchView: View {
                     if !filteredIdeas.isEmpty {
                         Section("Ideas") {
                             ForEach(filteredIdeas) { idea in
-                                resultRow(icon: "lightbulb", title: idea.summary, subtitle: idea.authorName, tint: .orange) {
+                                resultRow(icon: "lightbulb", title: idea.summary, subtitle: idea.authorName, tint: .accentColor) {
                                     router.selection = .ideas
                                     dismiss()
                                 }
@@ -106,7 +106,7 @@ struct GlobalSearchView: View {
                     if !filteredInventory.isEmpty {
                         Section("Inventory") {
                             ForEach(filteredInventory) { item in
-                                resultRow(icon: "shippingbox", title: item.name, subtitle: "Bin \(item.binLocation)", tint: .green) {
+                                resultRow(icon: "shippingbox", title: item.name, subtitle: "Bin \(item.binLocation)", tint: .accentColor) {
                                     router.selection = .inventory
                                     dismiss()
                                 }

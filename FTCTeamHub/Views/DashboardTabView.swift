@@ -12,6 +12,7 @@ import SwiftData
 struct DashboardTabView: View {
     @Environment(AuthenticationManager.self) private var authManager
     @Environment(TabRouter.self) private var router
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     @Query private var allTasks: [TaskItem]
     @Query private var batteries: [Battery]
@@ -21,6 +22,7 @@ struct DashboardTabView: View {
     @Query private var notebookEntries: [NotebookEntry]
     @Query private var ideas: [Idea]
     @Query private var teamSettingsList: [TeamSettings]
+    @Query(sort: \TeamEventRecord.startsAt) private var teamEvents: [TeamEventRecord]
     @Query(sort: \ActivityEvent.timestamp, order: .reverse) private var activity: [ActivityEvent]
     @Query(sort: \ChecklistRun.timestamp, order: .reverse) private var checklistRuns: [ChecklistRun]
 
@@ -78,9 +80,9 @@ struct DashboardTabView: View {
         checklistRuns.contains { $0.type == .preFlight }
     }
 
-    private var nextTeamEvent: FTCEvent? {
+    private var nextTeamEvent: TeamEventRecord? {
         let today = Calendar.current.startOfDay(for: .now)
-        return FTCEvent.all.first { Calendar.current.startOfDay(for: $0.date) >= today }
+        return teamEvents.first { Calendar.current.startOfDay(for: $0.startsAt) >= today }
     }
 
     private var nextEventCountdown: String? {
@@ -88,7 +90,7 @@ struct DashboardTabView: View {
               let days = Calendar.current.dateComponents(
                 [.day],
                 from: Calendar.current.startOfDay(for: .now),
-                to: Calendar.current.startOfDay(for: nextTeamEvent.date)
+                to: Calendar.current.startOfDay(for: nextTeamEvent.startsAt)
               ).day else { return nil }
         if days == 0 { return "Today" }
         if days == 1 { return "Tomorrow" }
@@ -97,15 +99,7 @@ struct DashboardTabView: View {
 
     private var teamName: String {
         let name = teamSettingsList.first?.teamName.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        return name.isEmpty ? "Wild Circuits" : name
-    }
-
-    private var teamNumber: Int {
-        teamSettingsList.first?.teamNumber ?? 24211
-    }
-
-    private var seasonName: String {
-        teamSettingsList.first?.seasonName ?? "2026–27"
+        return name
     }
 
     private var insights: [Insight] {
@@ -178,6 +172,7 @@ struct DashboardTabView: View {
                 ToolbarItemGroup(placement: .topBarTrailing) {
                     Button { router.selection = .calendar } label: {
                         Image(systemName: "calendar")
+                            .frame(minWidth: FTCDesign.minimumHitTarget, minHeight: FTCDesign.minimumHitTarget)
                     }
                     .accessibilityLabel("Season calendar")
                     Menu {
@@ -218,11 +213,10 @@ struct DashboardTabView: View {
                         }
                     } label: {
                         Image(systemName: "plus")
-                            .font(.system(size: 15, weight: .bold))
-                            .foregroundStyle(.white)
-                            .frame(width: 30, height: 30)
-                            .background(FTCBrand.orange, in: RoundedRectangle(cornerRadius: 9))
+                            .frame(minWidth: FTCDesign.minimumHitTarget, minHeight: FTCDesign.minimumHitTarget)
                     }
+                    .buttonStyle(.borderedProminent)
+                    .clipShape(RoundedRectangle(cornerRadius: FTCDesign.controlRadius, style: .continuous))
                     .accessibilityLabel("Create or find team records")
                 }
             }
@@ -235,27 +229,33 @@ struct DashboardTabView: View {
 
     private var header: some View {
         VStack(alignment: .leading, spacing: 9) {
-            HStack(spacing: 7) {
-                Circle().fill(FTCBrand.orange).frame(width: 7, height: 7)
+            if !teamName.isEmpty {
                 Text(teamName)
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(.secondary)
+            }
+            HStack {
                 Spacer()
                 if let user = authManager.currentUser {
                     Text(user.initials)
-                        .font(.system(size: 10, weight: .bold, design: .rounded))
-                        .foregroundStyle(.white)
-                        .frame(width: 31, height: 31)
-                        .background(user.avatarColor.color, in: Circle())
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.primary)
+                        .frame(width: FTCDesign.minimumHitTarget, height: FTCDesign.minimumHitTarget)
+                        .background(user.avatarColor.color.opacity(0.18), in: Circle())
                 }
             }
             Text(greeting)
-                .font(.system(size: 30, weight: .bold, design: .rounded))
-                .tracking(-0.8)
+                .font(.largeTitle.weight(.bold))
                 .foregroundStyle(.primary)
-            Text("FTC \(seasonName)  ·  Team \(teamNumber)  ·  \(Date.now.formatted(.dateTime.weekday(.wide).month(.wide).day()))")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
+            if let settings = teamSettingsList.first {
+                Text("FTC \(settings.seasonName) · Team \(settings.teamNumber) · \(Date.now.formatted(.dateTime.weekday(.wide).month(.wide).day()))")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            } else {
+                Text(Date.now.formatted(.dateTime.weekday(.wide).month(.wide).day()))
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            }
         }
     }
 
@@ -268,11 +268,11 @@ struct DashboardTabView: View {
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(.secondary)
                     Text(readinessHeadline)
-                        .font(.system(.subheadline, design: .rounded, weight: .medium))
+                        .font(.subheadline)
                         .fixedSize(horizontal: false, vertical: true)
                     VStack(alignment: .leading, spacing: 3) {
                         ForEach(readinessFactors.filter { !$0.isGood && $0.isTracked }.prefix(2), id: \.label) { factor in
-                            Label(factor.label, systemImage: "circle.fill")
+                            Label(factor.label, systemImage: "exclamationmark.circle")
                                 .font(.caption2.weight(.medium))
                                 .foregroundStyle(.secondary)
                                 .labelStyle(.readinessBullet)
@@ -316,102 +316,126 @@ struct DashboardTabView: View {
     @ViewBuilder
     private var nextEventCard: some View {
         GroupBox {
-            HStack {
-                Image(systemName: "calendar.badge.clock")
-                    .font(.title3.weight(.medium))
-                    .foregroundStyle(FTCBrand.accentText)
-                    .frame(width: 40, height: 40)
-                    .background(FTCBrand.accentText.opacity(0.09), in: RoundedRectangle(cornerRadius: 11))
-                VStack(alignment: .leading, spacing: 2) {
-                    if let event = nextTeamEvent {
-                        Text(event.title)
-                            .font(.subheadline.weight(.semibold))
-                            .foregroundStyle(.primary)
-                            .lineLimit(2)
-                        Text([nextEventCountdown,
-                              event.date.formatted(.dateTime.weekday(.wide).month(.abbreviated).day()),
-                              event.time, event.venue]
-                            .compactMap { $0 }
-                            .joined(separator: " · "))
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(2)
-                            .fixedSize(horizontal: false, vertical: true)
-                    } else {
-                        Text("Season schedule complete")
-                            .font(.subheadline.weight(.semibold))
-                            .foregroundStyle(.primary)
-                        Text("No more team events are listed.")
-                            .font(.caption)
+            VStack(alignment: .leading, spacing: FTCDesign.space8) {
+                Label("Next event", systemImage: "calendar")
+                    .font(.headline)
+                if let event = nextTeamEvent {
+                    Text(event.title)
+                        .font(.body.weight(.semibold))
+                    LabeledContent("Date", value: event.startsAt.formatted(.dateTime.weekday(.wide).month(.wide).day()))
+                    LabeledContent("Time", value: event.timeDescription)
+                    LabeledContent("Location", value: event.venue)
+                    if let countdown = nextEventCountdown {
+                        Text(countdown)
+                            .font(.subheadline)
                             .foregroundStyle(.secondary)
                     }
+                } else if teamEvents.isEmpty {
+                    ContentUnavailableView("No team events", systemImage: "calendar",
+                                           description: Text("The season calendar is empty."))
+                } else {
+                    Text("No upcoming events")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
                 }
-                Spacer()
-                Button {
-                    router.selection = .calendar
-                } label: {
-                    Image(systemName: "arrow.up.right")
-                        .font(.caption.weight(.bold))
-                        .foregroundStyle(FTCBrand.accentText)
-                }
-                .accessibilityLabel("Open season calendar")
             }
-            .padding(14)
         }
         .groupBoxStyle(DashboardGroupBoxStyle())
+        .contentShape(Rectangle())
+        .onTapGesture { router.selection = .calendar }
+        .accessibilityHint("Opens the season calendar")
     }
 
     // MARK: - Stat grid
 
     private var statGrid: some View {
-        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
-            DashboardStatCard(
-                title: "My open tasks", value: "\(myOpenTasks.count)",
-                subtitle: overdueTasks.isEmpty ? nil : "\(overdueTasks.count) overdue",
-                subtitleColor: .red, icon: "checklist"
-            ) { router.selection = .tasks }
-
-            DashboardStatCard(
-                title: "Batteries", value: "\(batteries.count)",
-                subtitle: batteriesNeedingAttention.isEmpty ? nil : "\(batteriesNeedingAttention.count) need attention",
-                subtitleColor: .orange, icon: "battery.75"
-            ) { router.selection = .pitOps }
-
-            DashboardStatCard(
-                title: "Notebook & ideas", value: "\(notebookEntries.count + ideas.count)",
-                subtitle: "\(notebookEntries.count) notes · \(ideas.count) ideas",
-                subtitleColor: .secondary, icon: "book.closed"
-            ) { router.selection = .workHome }
-
-            DashboardStatCard(
-                title: "Match reports", value: "\(scoutingReports.count)", subtitle: "team observations", subtitleColor: .secondary,
-                icon: "scope"
-            ) { router.selection = .scoutingReports }
+        VStack(spacing: 0) {
+            dashboardMetric("My open tasks", count: myOpenTasks.count,
+                            detail: overdueTasks.isEmpty ? nil : "\(overdueTasks.count) overdue",
+                            symbol: "checklist", tab: .tasks, tint: overdueTasks.isEmpty ? .secondary : .red)
+            Divider()
+            dashboardMetric("Batteries", count: batteries.count,
+                            detail: batteriesNeedingAttention.isEmpty ? nil : "\(batteriesNeedingAttention.count) need attention",
+                            symbol: "battery.75", tab: .pitOps,
+                            tint: batteriesNeedingAttention.isEmpty ? .secondary : .orange)
+            Divider()
+            dashboardMetric("Notebook entries", count: notebookEntries.count,
+                            detail: "\(ideas.count) ideas", symbol: "book.closed",
+                            tab: .workHome, tint: .secondary)
+            Divider()
+            dashboardMetric("Match reports", count: scoutingReports.count,
+                            detail: "Team observations", symbol: "scope",
+                            tab: .scoutingReports, tint: .secondary)
         }
+        .padding(.horizontal, FTCDesign.space16)
+        .background(FTCDesign.secondarySurface,
+                    in: RoundedRectangle(cornerRadius: FTCDesign.cardRadius, style: .continuous))
+    }
+
+    private func dashboardMetric(
+        _ title: String,
+        count: Int,
+        detail: String?,
+        symbol: String,
+        tab: AppTab,
+        tint: Color
+    ) -> some View {
+        Button {
+            router.selection = tab
+        } label: {
+            HStack(spacing: FTCDesign.space12) {
+                Label(title, systemImage: symbol)
+                    .font(.body)
+                    .labelStyle(.titleAndIcon)
+                    .foregroundStyle(FTCDesign.label)
+                Spacer(minLength: FTCDesign.space8)
+                if let detail {
+                    Text(detail)
+                        .font(.caption)
+                        .foregroundStyle(tint)
+                        .lineLimit(1)
+                }
+                Text(count, format: .number)
+                    .font(.body.weight(.semibold).monospacedDigit())
+                    .contentTransition(.numericText())
+                    .foregroundStyle(FTCDesign.label)
+                Image(systemName: "chevron.right")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(FTCDesign.tertiaryLabel)
+            }
+            .frame(minHeight: FTCDesign.minimumHitTarget)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityHint("Opens \(title.lowercased())")
     }
 
     // MARK: - Insights
 
     private var insightsSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: FTCDesign.space8) {
             Text("Trends are calculated on this device from records entered by your team.")
                 .font(.caption2).foregroundStyle(.tertiary)
 
-            VStack(spacing: 8) {
+            VStack(spacing: 0) {
                 ForEach(insights) { insight in
                     HStack(alignment: .top, spacing: 10) {
                         Image(systemName: insight.icon)
                             .foregroundStyle(color(for: insight.tint))
-                            .frame(width: 20)
                         Text(insight.text)
                             .font(.footnote)
                             .fixedSize(horizontal: false, vertical: true)
                         Spacer(minLength: 0)
                     }
-                    .padding(12)
-                    .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 12))
+                    .padding(.vertical, FTCDesign.space12)
+                    if insight.id != insights.last?.id {
+                        Divider()
+                    }
                 }
             }
+            .padding(.horizontal, FTCDesign.space16)
+            .background(FTCDesign.secondarySurface,
+                        in: RoundedRectangle(cornerRadius: FTCDesign.cardRadius, style: .continuous))
         }
     }
 
@@ -449,7 +473,7 @@ struct DashboardTabView: View {
                 router.selection = .checklists
             } label: {
                 HStack {
-                    Image(systemName: "checklist").foregroundStyle(.blue)
+                    Image(systemName: "checklist").foregroundStyle(Color.accentColor)
                     Text(todaysPreFlightChecklist == nil
                          ? "No pre-flight checklist completed today"
                          : "Finish all pre-flight checks before practice")
@@ -467,7 +491,7 @@ struct DashboardTabView: View {
 
     private var recentActivitySection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Recent Activity").font(.headline)
+            Text("Recent activity").font(.headline)
 
             if activity.isEmpty {
                 Text("No activity yet.").font(.footnote).foregroundStyle(.secondary)
@@ -477,7 +501,6 @@ struct DashboardTabView: View {
                         HStack(spacing: 10) {
                             Image(systemName: event.systemImage)
                                 .foregroundStyle(Color.accentColor)
-                                .frame(width: 20)
                             (Text(event.authorName).fontWeight(.semibold) + Text(" \(event.message)"))
                                 .font(.footnote)
                                 .lineLimit(2)
@@ -486,25 +509,27 @@ struct DashboardTabView: View {
                                 .font(.caption2)
                                 .foregroundStyle(.secondary)
                         }
-                        .padding(.vertical, 8)
+                        .padding(.vertical, FTCDesign.space12)
                         if index < min(activity.count, 6) - 1 { Divider() }
                     }
                 }
-                .padding(.horizontal, 12)
-                .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 12))
+                .padding(.horizontal, FTCDesign.space16)
+                .background(FTCDesign.secondarySurface,
+                            in: RoundedRectangle(cornerRadius: FTCDesign.cardRadius, style: .continuous))
             }
         }
     }
 }
 
 private struct ReadinessRing: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let score: Double?
 
     private var tint: Color {
         guard let score else { return .secondary }
         switch score {
         case 0.75...: return .green
-        case 0.5..<0.75: return FTCBrand.orange
+        case 0.5..<0.75: return .orange
         default: return .red
         }
     }
@@ -521,23 +546,25 @@ private struct ReadinessRing: View {
             }
             VStack(spacing: 0) {
                 Text(score.map { "\(Int(($0 * 100).rounded()))%" } ?? "—")
-                    .font(.system(size: 19, weight: .bold, design: .rounded))
+                    .font(.headline.weight(.semibold).monospacedDigit())
                     .foregroundStyle(.primary)
-                    .monospacedDigit()
                 Text("ready")
-                    .font(.system(size: 9, weight: .semibold, design: .rounded))
+                    .font(.caption2.weight(.medium))
                     .foregroundStyle(.secondary)
             }
         }
         .frame(width: 72, height: 72)
-        .animation(.easeInOut(duration: 0.4), value: score)
+        .animation(
+            reduceMotion ? .easeOut(duration: 0.12) : .snappy(duration: 0.28),
+            value: score
+        )
     }
 }
 
 private struct ReadinessBulletLabelStyle: LabelStyle {
     func makeBody(configuration: Configuration) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: 5) {
-            configuration.icon.font(.system(size: 4))
+            configuration.icon.font(.caption2)
             configuration.title
         }
     }
@@ -547,61 +574,15 @@ private extension LabelStyle where Self == ReadinessBulletLabelStyle {
     static var readinessBullet: ReadinessBulletLabelStyle { ReadinessBulletLabelStyle() }
 }
 
-private struct DashboardStatCard: View {
-    let title: String
-    let value: String
-    let subtitle: String?
-    let subtitleColor: Color
-    let icon: String
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            VStack(alignment: .leading, spacing: 8) {
-                HStack {
-                    Image(systemName: icon)
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(FTCBrand.accentText)
-                        .frame(width: 29, height: 29)
-                        .background(FTCBrand.accentText.opacity(0.09),
-                                    in: RoundedRectangle(cornerRadius: 8))
-                    Spacer()
-                }
-                Text(value)
-                    .font(.system(size: 27, weight: .semibold).monospacedDigit())
-                    .foregroundStyle(.primary)
-                Text(title)
-                    .font(.system(.caption, design: .rounded, weight: .medium))
-                    .foregroundStyle(.secondary)
-                if let subtitle {
-                    Text(subtitle)
-                        .font(.caption2.weight(.medium))
-                        .foregroundStyle(subtitleColor)
-                }
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(14)
-            .frame(minHeight: 124, alignment: .topLeading)
-            .background(Color(uiColor: .secondarySystemGroupedBackground),
-                        in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-            .overlay {
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .stroke(FTCBrand.line.opacity(0.65), lineWidth: 0.75)
-            }
-        }
-        .buttonStyle(.plain)
-    }
-}
-
 private struct DashboardGroupBoxStyle: GroupBoxStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.content
-            .background(Color(uiColor: .secondarySystemGroupedBackground),
-                        in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-            .overlay {
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .stroke(FTCBrand.line.opacity(0.65), lineWidth: 0.75)
-            }
+            .padding(FTCDesign.space16)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                FTCDesign.secondarySurface,
+                in: RoundedRectangle(cornerRadius: FTCDesign.cardRadius, style: .continuous)
+            )
     }
 }
 
@@ -623,13 +604,11 @@ private struct QuickPracticeLogSheet: View {
         NavigationStack {
             Form {
                 Section {
-                    LabeledContent("DATE", value: Date.now.formatted(date: .complete, time: .omitted))
+                    LabeledContent("Date", value: Date.now.formatted(date: .complete, time: .omitted))
                     TextField("Log title", text: $title, prompt: Text("What did you work on?"))
                     Picker("Area", selection: $area) {
                         ForEach(areas, id: \.self) { Text($0).tag($0) }
                     }
-                } header: {
-                    Text("PRACTICE LOG")
                 } footer: {
                     Text("Saved to the engineering notebook and tagged for search.")
                 }

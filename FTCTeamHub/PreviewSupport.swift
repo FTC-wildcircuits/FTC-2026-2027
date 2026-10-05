@@ -16,18 +16,27 @@ func makePreviewContainer() -> ModelContainer {
         TestRunRecord.self, Idea.self, ActivityEvent.self, TrackedTeam.self,
         Battery.self, ChecklistRun.self, InventoryItem.self,
         TeamSettings.self, Sponsor.self, BudgetExpense.self,
-        ScoringElement.self, ScoutingReport.self
+        ScoringElement.self, ScoutingReport.self, TeamEventRecord.self
     ])
     let config = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
     let container = try! ModelContainer(for: schema, configurations: [config])
     let context = container.mainContext
+    context.insert(TeamSettings())
+    context.insert(TeamEventRecord(
+        id: "practice-2026-10-10",
+        title: "Practice Event",
+        category: "Practice",
+        startsAt: Calendar.current.date(from: DateComponents(year: 2026, month: 10, day: 10)) ?? .now,
+        timeDescription: "8:30 AM – 3:00 PM",
+        venue: "Rowan University"
+    ))
 
     let alex = AppUser(email: "alex@team24211.com", name: "Alex Rivera", role: .softwareLead,
-                        avatarColor: .blue, passwordHash: "", isLogged: true)
+                        avatarColor: .red, passwordHash: "", isLogged: true)
     let sam = AppUser(email: "sam@team24211.com", name: "Sam Okafor", role: .hardware,
                        avatarColor: .orange, passwordHash: "")
     let priya = AppUser(email: "priya@team24211.com", name: "Priya Nandan", role: .strategy,
-                         avatarColor: .purple, passwordHash: "")
+                         avatarColor: .red, passwordHash: "")
     let jordan = AppUser(email: "jordan@team24211.com", name: "Jordan Lee", role: .builder,
                           avatarColor: .green, passwordHash: "")
 
@@ -68,8 +77,8 @@ func makePreviewContainer() -> ModelContainer {
     context.insert(NotebookEntry(authorID: alex.id, authorName: alex.name, title: "IMU drift investigation",
                                   content: "## Summary\nObserved yaw drift after 8 minutes of continuous operation.",
                                   tags: ["Software", "IMU"],
-                                  imuLog: IMUTuningLog(chip: "BHI260AP", logoFacingDirection: "UP",
-                                                        usbFacingDirection: "FORWARD", yawOffsetDegrees: 1.2,
+                                  imuLog: IMUTuningLog(chip: "BHI260AP", logoFacingDirection: "Up",
+                                                        usbFacingDirection: "Forward", yawOffsetDegrees: 1.2,
                                                         driftOverTenMinDegrees: 2.8,
                                                         calibrationNotes: "Re-ran calibration after remounting hub level.")))
 

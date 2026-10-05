@@ -1,5 +1,5 @@
 //
-//  SecretResetTrigger.swift
+//  ResetConfirmationSheet.swift
 //  FTCTeamHub
 //
 //  A hidden gesture that reveals the "Reset App Data" flow after seven
@@ -9,49 +9,6 @@
 
 import SwiftUI
 import SwiftData
-import UIKit
-
-struct SecretResetTrigger<Content: View>: View {
-    @Environment(\.modelContext) private var context
-    @Environment(AuthenticationManager.self) private var authManager
-
-    @ViewBuilder let content: () -> Content
-
-    @State private var tapCount = 0
-    @State private var lastTapTime: Date = .distantPast
-    @State private var isPresentingResetSheet = false
-
-    private let requiredTaps = 7
-    private let tapWindowSeconds: TimeInterval = 3
-
-    var body: some View {
-        content()
-            .contentShape(Rectangle())
-            .onTapGesture {
-                registerTap()
-            }
-            .sheet(isPresented: $isPresentingResetSheet) {
-                ResetConfirmationSheet()
-            }
-    }
-
-    private func registerTap() {
-        let now = Date()
-        if now.timeIntervalSince(lastTapTime) > tapWindowSeconds {
-            tapCount = 0
-        }
-        lastTapTime = now
-        tapCount += 1
-
-        if tapCount >= requiredTaps {
-            tapCount = 0
-            UINotificationFeedbackGenerator().notificationOccurred(.warning)
-            isPresentingResetSheet = true
-        } else if tapCount >= requiredTaps - 2 {
-            UIImpactFeedbackGenerator(style: .light).impactOccurred()
-        }
-    }
-}
 
 struct ResetConfirmationSheet: View {
     @Environment(\.dismiss) private var dismiss
@@ -65,7 +22,7 @@ struct ResetConfirmationSheet: View {
     @State private var isWiping = false
     @State private var resultMessage: String?
     @State private var resetError: String?
-    private let expectedPhrase = "RESET"
+    private let expectedPhrase = "reset"
 
     var body: some View {
         NavigationStack {
@@ -85,9 +42,9 @@ struct ResetConfirmationSheet: View {
                     Text("Turn this off only if you want to keep the current account on this device.")
                 }
 
-                Section("Type RESET to confirm") {
-                    TextField("RESET", text: $confirmationText)
-                        .textInputAutocapitalization(.characters)
+                Section("Type reset to confirm") {
+                    TextField("reset", text: $confirmationText)
+                        .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
                 }
 
@@ -95,6 +52,30 @@ struct ResetConfirmationSheet: View {
                     Section {
                         Text(resultMessage).font(.footnote).foregroundStyle(.green)
                     }
+                }
+
+                #Preview("Reset confirmation · Light") {
+                    let container = makePreviewContainer()
+                    return ResetConfirmationSheet()
+                        .modelContainer(container)
+                        .environment(AuthenticationManager(modelContext: container.mainContext))
+                        .preferredColorScheme(.light)
+                }
+
+                #Preview("Reset confirmation · Dark") {
+                    let container = makePreviewContainer()
+                    return ResetConfirmationSheet()
+                        .modelContainer(container)
+                        .environment(AuthenticationManager(modelContext: container.mainContext))
+                        .preferredColorScheme(.dark)
+                }
+
+                #Preview("Reset confirmation · Accessibility") {
+                    let container = makePreviewContainer()
+                    return ResetConfirmationSheet()
+                        .modelContainer(container)
+                        .environment(AuthenticationManager(modelContext: container.mainContext))
+                        .dynamicTypeSize(.accessibility5)
                 }
                 if let resetError {
                     Section {
@@ -109,7 +90,7 @@ struct ResetConfirmationSheet: View {
                         if isWiping {
                             ProgressView()
                         } else {
-                            Text("Wipe All Data").frame(maxWidth: .infinity)
+                            Text("Reset local data").frame(maxWidth: .infinity)
                         }
                     }
                     .disabled(confirmationText != expectedPhrase || isWiping)
@@ -121,6 +102,8 @@ struct ResetConfirmationSheet: View {
             }
         }
         .interactiveDismissDisabled(isWiping)
+        .sensoryFeedback(.success, trigger: resultMessage)
+        .sensoryFeedback(.error, trigger: resetError)
     }
 
     private func performWipe() {
@@ -129,7 +112,6 @@ struct ResetConfirmationSheet: View {
             cloudSyncEnabled = false
             syncService?.stop()
             try DataResetManager.wipeAllLocalData(context: context, includeRoster: includeRoster)
-            UINotificationFeedbackGenerator().notificationOccurred(.success)
             resultMessage = "Done. Local data is cleared; shared Firestore data was not changed."
             if includeRoster {
                 authManager.signOut()
@@ -138,17 +120,8 @@ struct ResetConfirmationSheet: View {
                 dismiss()
             }
         } catch {
-            UINotificationFeedbackGenerator().notificationOccurred(.error)
             resetError = "Reset failed: \(error.localizedDescription)"
             isWiping = false
         }
-    }
-}
-
-#Preview {
-    SecretResetTrigger {
-        Text("FTC Team Hub v1.0")
-            .font(.caption2)
-            .foregroundStyle(.tertiary)
     }
 }

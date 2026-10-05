@@ -39,18 +39,7 @@ enum AvatarColor: String, Codable, CaseIterable, Identifiable {
 
     var id: String { rawValue }
 
-    var color: Color {
-        switch self {
-        case .blue: return .blue
-        case .red: return .red
-        case .green: return .green
-        case .orange: return .orange
-        case .purple: return .purple
-        case .pink: return .pink
-        case .teal: return .teal
-        case .indigo: return .indigo
-        }
-    }
+    var color: Color { .red }
 }
 
 // MARK: - AppUser
@@ -90,7 +79,7 @@ final class AppUser {
     }
 
     var avatarColor: AvatarColor {
-        get { AvatarColor(rawValue: avatarColorRaw) ?? .blue }
+        get { AvatarColor(rawValue: avatarColorRaw) ?? .red }
         set { avatarColorRaw = newValue.rawValue }
     }
 

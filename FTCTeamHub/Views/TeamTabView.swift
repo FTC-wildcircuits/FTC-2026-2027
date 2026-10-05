@@ -49,7 +49,6 @@ private struct ProfileSettingsView: View {
     @Environment(\.modelContext) private var context
     @Environment(\.syncService) private var syncService
     @Environment(AuthenticationManager.self) private var authManager
-    @AppStorage("accentColorRaw") private var accentColorRaw: String = AvatarColor.red.rawValue
     @AppStorage("cloudSyncEnabled") private var cloudSyncEnabled = false
     @State private var isPresentingReset = false
     @State private var cloudSyncError: String?
@@ -109,13 +108,6 @@ private struct ProfileSettingsView: View {
                 }
             }
 
-            Section("Accent color") {
-                FTCColorPicker(selection: accentSelection)
-                Text("Changes button and highlight color on this iPhone only.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-
             Section {
                 Button("Sign Out", role: .destructive) {
                     authManager.signOut()
@@ -135,12 +127,6 @@ private struct ProfileSettingsView: View {
         }
     }
 
-    private var accentSelection: Binding<AvatarColor> {
-        Binding(
-            get: { AvatarColor(rawValue: accentColorRaw) ?? .red },
-            set: { accentColorRaw = $0.rawValue }
-        )
-    }
 }
 
 private struct TeamSettingsFields: View {
@@ -429,15 +415,9 @@ private struct AboutView: View {
             Section {
                 VStack(spacing: 8) {
                     Image(systemName: "gearshape.2.fill")
-                        .font(.system(size: 40))
+                        .font(.largeTitle)
                         .foregroundStyle(Color.accentColor)
                     Text("FTC Team Hub").font(.headline)
-
-                    SecretResetTrigger {
-                        Text("Version 1.0")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
                 }
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 12)
@@ -445,7 +425,7 @@ private struct AboutView: View {
             Section("About") {
                 LabeledContent("App version", value: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "Development")
                 LabeledContent("Build", value: Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "Development")
-                Text("Built for team management: roster, testing telemetry, tasks, engineering notebook, ideas, pit ops, match scouting, scoring strategy, and FTCScout event data. Team records sync through your configured Firestore project.")
+                Text("Team tools include roster, testing, tasks, the engineering notebook, ideas, pit operations, match scouting, scoring, and FTCScout event data. Cloud sync is available through opt-in Firestore settings.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }

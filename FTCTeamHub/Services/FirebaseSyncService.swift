@@ -121,7 +121,7 @@ final class FirebaseSyncService {
         let data = document.data()
         let descriptor = FetchDescriptor<AppUser>(predicate: #Predicate { $0.id == id })
         let existing = try? context.fetch(descriptor).first
-        let user = existing ?? AppUser(id: id, email: data["email"] as? String ?? "", name: "", role: .builder, avatarColor: .blue, passwordHash: "")
+        let user = existing ?? AppUser(id: id, email: data["email"] as? String ?? "", name: "", role: .builder, avatarColor: .red, passwordHash: "")
         user.email = data["email"] as? String ?? user.email
         user.name = data["name"] as? String ?? user.name
         user.roleRaw = data["roleRaw"] as? String ?? user.roleRaw

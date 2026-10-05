@@ -27,6 +27,7 @@ enum DataResetManager {
         try deleteAll(ScoutingReport.self, in: context)
         try deleteAll(TrackedTeam.self, in: context)
         try deleteAll(TeamSettings.self, in: context)
+        try deleteAll(TeamEventRecord.self, in: context)
         try deleteAll(Sponsor.self, in: context)
         try deleteAll(BudgetExpense.self, in: context)
         try deleteAll(ScoringElement.self, in: context)
@@ -38,6 +39,7 @@ enum DataResetManager {
         try context.save()
         UserDefaults.standard.set(AvatarColor.red.rawValue, forKey: "accentColorRaw")
         UserDefaults.standard.set(false, forKey: "cloudSyncEnabled")
+        UserDefaults.standard.removeObject(forKey: "eventReadiness.completedItems")
         NotificationScheduler.cancelAllReminders()
         if includeRoster {
             KeychainService.delete("com.ftcteamhub.session.userID")

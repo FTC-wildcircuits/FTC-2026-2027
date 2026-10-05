@@ -11,6 +11,7 @@ struct ChatTabView: View {
     @Environment(\.chatService) private var chatService
     @Environment(AuthenticationManager.self) private var authManager
     @Environment(TabRouter.self) private var router
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @AppStorage("cloudSyncEnabled") private var cloudSyncEnabled = false
     @State private var draft = ""
     @State private var isSending = false
@@ -69,7 +70,7 @@ struct ChatTabView: View {
                             }
                             .onChange(of: chatService.messages.count) {
                                 if let last = chatService.messages.last {
-                                    withAnimation {
+                                    withAnimation(reduceMotion ? .easeOut(duration: 0.12) : .snappy(duration: 0.24)) {
                                         proxy.scrollTo(last.id, anchor: .bottom)
                                     }
                                 }
@@ -123,7 +124,7 @@ struct ChatTabView: View {
                             send()
                         } label: {
                             Image(systemName: isSending ? "hourglass" : "arrow.up.circle.fill")
-                                .font(.system(size: 30))
+                                .font(.largeTitle)
                         }
                         .disabled(draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isSending || chatService == nil)
                     }
@@ -189,9 +190,9 @@ private struct ChatBubble: View {
                 }
                 Text(message.text)
                     .padding(.horizontal, 12).padding(.vertical, 8)
-                    .background(isMine ? Color.accentColor : Color(.secondarySystemGroupedBackground),
+                    .background(isMine ? Color.accentColor.opacity(0.14) : FTCDesign.secondarySurface,
                                 in: RoundedRectangle(cornerRadius: 16))
-                    .foregroundStyle(isMine ? .white : .primary)
+                    .foregroundStyle(.primary)
                 if message.isPending {
                     Text("Waiting to sync…")
                         .font(.caption2)

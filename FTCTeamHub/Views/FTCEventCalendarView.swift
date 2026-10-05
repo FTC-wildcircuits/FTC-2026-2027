@@ -1,77 +1,30 @@
 import SwiftUI
 import SwiftData
 
-struct FTCEvent: Identifiable, Hashable {
-    let id: String
-    let title: String
-    let kind: String
-    let date: Date
-    let time: String
-    let venue: String
-    let address: String?
-    let detail: String?
-    let symbol: String
-    let color: Color
-
+private extension TeamEventRecord {
+    var date: Date { startsAt }
+    var kind: String { category }
+    var time: String { timeDescription }
+    var addressText: String? { address.isEmpty ? nil : address }
+    var detail: String? { details.isEmpty ? nil : details }
+    var symbol: String { category == "Practice" ? "figure.run" : "trophy" }
+    var labelColor: Color { .accentColor }
     var notebookTag: String { "event:\(id)" }
     var notebookDisplayTag: String {
         "\(title) · \(date.formatted(date: .abbreviated, time: .omitted))"
     }
-    var labelColor: Color {
-        kind == "TOURNAMENT" ? FTCBrand.accentText : color
-    }
-
-    static let all: [FTCEvent] = {
-        let calendar = Calendar(identifier: .gregorian)
-        let definitions: [(String, Int, Int, Int, String, String, String, String?, String?, String, Color)] = [
-            ("practice-2026-10-10", 2026, 10, 10, "Practice Event", "8:30 AM – 3:00 PM",
-             "Rowan University", nil, "Practice event; does not impact league standings.",
-             "figure.run", FTCBrand.cyan),
-            ("league-2026-10-24", 2026, 10, 24, "1st League Meet", "8:30 AM – 4:30 PM",
-             "Holmdel High School", "36 Crawfords Corner Rd, Holmdel, NJ 07733", nil,
-             "trophy.fill", FTCBrand.blue),
-            ("league-2026-11-15", 2026, 11, 15, "2nd League Meet", "8:30 AM – 4:30 PM",
-             "Williamstown Middle School", "561 Clayton Rd, Williamstown, NJ", nil,
-             "trophy.fill", FTCBrand.violet),
-            ("league-2027-01-23", 2027, 1, 23, "3rd League Meet", "8:30 AM – 4:30 PM",
-             "Howell High School", "405 Squankum Yellowbrook Rd, Farmingdale, NJ", nil,
-             "trophy.fill", FTCBrand.blue),
-            ("tournament-2027-02-27", 2027, 2, 27, "League Tournament", "8:30 AM – 4:30 PM",
-             "North Burlington County Middle School", "160 Mansfield Rd East, Columbus, NJ 08022",
-             "Championship day. Bring the robot, pit kit, charged batteries, and team notebook.",
-             "trophy.fill", FTCBrand.orange)
-        ]
-        return definitions.compactMap { item in
-            guard let date = calendar.date(from: DateComponents(year: item.1, month: item.2, day: item.3)) else {
-                return nil
-            }
-            let kind = item.0.hasPrefix("practice") ? "PRACTICE"
-                : item.0.hasPrefix("tournament") ? "TOURNAMENT" : "LEAGUE"
-            return FTCEvent(id: item.0, title: item.4, kind: kind,
-                            date: date, time: item.5, venue: item.6, address: item.7,
-                            detail: item.8, symbol: item.9, color: item.10)
-        }.sorted { $0.date < $1.date }
-    }()
 }
 
 struct FTCEventCalendarView: View {
     @Environment(TabRouter.self) private var router
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Query(sort: \TeamEventRecord.startsAt) private var events: [TeamEventRecord]
     @Query private var teamSettingsList: [TeamSettings]
-    @State private var displayedMonth = Self.initialMonth
-    @State private var selectedDate = Self.initialDate
-    @State private var selectedEvent: FTCEvent?
+    @State private var displayedMonth: Date = Calendar.current.dateInterval(of: .month, for: .now)?.start ?? .now
+    @State private var selectedDate: Date = Calendar.current.startOfDay(for: .now)
+    @State private var selectedEvent: TeamEventRecord?
 
-    private static var initialDate: Date {
-        FTCEvent.all.first(where: { Calendar.current.startOfDay(for: $0.date) >= Calendar.current.startOfDay(for: .now) })?.date
-            ?? FTCEvent.all.last?.date
-            ?? .now
-    }
-
-    private static var initialMonth: Date {
-        Calendar.current.dateInterval(of: .month, for: initialDate)?.start ?? initialDate
-    }
-
-    private let columns = Array(repeating: GridItem(.flexible(), spacing: 4), count: 7)
+    private let columns = Array(repeating: GridItem(.flexible(minimum: FTCDesign.minimumHitTarget), spacing: 0), count: 7)
 
     private var monthStart: Date {
         Calendar.current.dateInterval(of: .month, for: displayedMonth)?.start ?? displayedMonth
@@ -83,11 +36,7 @@ struct FTCEventCalendarView: View {
 
     private var teamName: String {
         let name = teamSettingsList.first?.teamName.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        return name.isEmpty ? "Wild Circuits" : name
-    }
-
-    private var seasonName: String {
-        teamSettingsList.first?.seasonName ?? "2026–27"
+        return name
     }
 
     private var monthDays: [Date?] {
@@ -106,12 +55,12 @@ struct FTCEventCalendarView: View {
         return (0..<symbols.count).map { symbols[(start + $0) % symbols.count] }
     }
 
-    private var eventsOnSelectedDate: [FTCEvent] {
-        FTCEvent.all.filter { Calendar.current.isDate($0.date, inSameDayAs: selectedDate) }
+    private var eventsOnSelectedDate: [TeamEventRecord] {
+        events.filter { Calendar.current.isDate($0.date, inSameDayAs: selectedDate) }
     }
 
-    private var upcomingEvents: [FTCEvent] {
-        FTCEvent.all.filter {
+    private var upcomingEvents: [TeamEventRecord] {
+        events.filter {
             Calendar.current.startOfDay(for: $0.date) >= Calendar.current.startOfDay(for: .now)
         }
     }
@@ -119,19 +68,19 @@ struct FTCEventCalendarView: View {
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(alignment: .leading, spacing: 22) {
+                VStack(alignment: .leading, spacing: FTCDesign.space24) {
                     seasonHeader
                     monthCalendar
                     selectedDaySection
                     upcomingSection
                 }
-                .padding(.horizontal, 18)
-                .padding(.top, 10)
-                .padding(.bottom, 32)
+                .padding(.horizontal, FTCDesign.space16)
+                .padding(.top, FTCDesign.space8)
+                .padding(.bottom, FTCDesign.space24)
             }
-            .background(FTCBrand.background.ignoresSafeArea())
+            .background(FTCDesign.groupedBackground.ignoresSafeArea())
             .navigationTitle("Season Calendar")
-            .navigationBarTitleDisplayMode(.inline)
+            .navigationBarTitleDisplayMode(.large)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button {
@@ -148,88 +97,90 @@ struct FTCEventCalendarView: View {
                     .presentationDragIndicator(.visible)
             }
         }
-        .environment(\.colorScheme, .dark)
+        .onAppear {
+            if let next = upcomingEvents.first {
+                selectedDate = Calendar.current.startOfDay(for: next.date)
+                displayedMonth = Calendar.current.dateInterval(of: .month, for: next.date)?.start ?? next.date
+            }
+        }
     }
 
     private var seasonHeader: some View {
-        FTCBrandCard {
-            HStack(alignment: .center, spacing: 16) {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("\(teamName)  ·  FTC \(seasonName)")
-                        .font(.system(.caption2, design: .rounded, weight: .bold))
-                        .tracking(1.2)
-                        .foregroundStyle(FTCBrand.cyan)
-                    Text("Team event\nschedule")
-                        .font(.system(.title, design: .rounded, weight: .bold))
-                        .foregroundStyle(.white)
-                        .fixedSize(horizontal: false, vertical: true)
-                    Text("\(upcomingEvents.count) upcoming team events")
-                        .font(.subheadline)
-                        .foregroundStyle(.white.opacity(0.7))
-                }
-                Spacer(minLength: 0)
-                FTCBrandMark(size: 66)
+        VStack(alignment: .leading, spacing: FTCDesign.space4) {
+            Text(teamName.isEmpty ? "Season calendar" : teamName)
+                .font(.largeTitle.weight(.bold))
+            if let seasonName = teamSettingsList.first?.seasonName {
+                Text(seasonName)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
             }
+            Text("\(upcomingEvents.count) upcoming events")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
         }
     }
 
     private var monthCalendar: some View {
         FTCBrandCard {
-            VStack(spacing: 18) {
+            VStack(spacing: FTCDesign.space16) {
                 HStack {
                     Button {
                         shiftMonth(by: -1)
                     } label: {
                         Image(systemName: "chevron.left")
-                            .frame(width: 36, height: 36)
-                            .background(.white.opacity(0.08), in: Circle())
+                            .frame(minWidth: FTCDesign.minimumHitTarget, minHeight: FTCDesign.minimumHitTarget)
                     }
                     .accessibilityLabel("Previous month")
                     Spacer()
                     Text(monthTitle)
-                        .font(.system(.title3, design: .rounded, weight: .bold))
+                        .font(.headline)
                     Spacer()
                     Button {
                         shiftMonth(by: 1)
                     } label: {
                         Image(systemName: "chevron.right")
-                            .frame(width: 36, height: 36)
-                            .background(.white.opacity(0.08), in: Circle())
+                            .frame(minWidth: FTCDesign.minimumHitTarget, minHeight: FTCDesign.minimumHitTarget)
                     }
                     .accessibilityLabel("Next month")
                 }
 
-                LazyVGrid(columns: columns, spacing: 10) {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    LazyVGrid(columns: columns, spacing: FTCDesign.space4) {
                     ForEach(Array(weekdaySymbols.enumerated()), id: \.offset) { _, symbol in
-                        Text(symbol.uppercased())
-                            .font(.system(.caption2, design: .rounded, weight: .bold))
-                            .foregroundStyle(.white.opacity(0.48))
-                            .frame(maxWidth: .infinity)
+                        Text(symbol)
+                            .font(.caption2.weight(.medium))
+                            .foregroundStyle(.secondary)
+                            .frame(minWidth: FTCDesign.minimumHitTarget, minHeight: FTCDesign.minimumHitTarget)
                     }
                     ForEach(Array(monthDays.enumerated()), id: \.offset) { _, day in
                         if let day {
                             calendarDay(day)
                         } else {
-                            Color.clear.frame(height: 42)
+                            Color.clear
+                                .frame(minWidth: FTCDesign.minimumHitTarget, minHeight: FTCDesign.minimumHitTarget)
                         }
                     }
+                    }
+                    .frame(minWidth: FTCDesign.minimumHitTarget * 7)
                 }
-                HStack(spacing: 7) {
-                    Circle().fill(FTCBrand.accentText).frame(width: 7, height: 7)
-                    Text("Team event")
+                HStack(spacing: FTCDesign.space8) {
+                    Image(systemName: "calendar")
                         .font(.caption2)
-                        .foregroundStyle(.white.opacity(0.65))
+                        .foregroundStyle(Color.accentColor)
+                    Text("Scheduled event")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                     Spacer()
-                    Text("Tap a date to see the agenda")
-                        .font(.caption2)
-                        .foregroundStyle(.white.opacity(0.45))
+                    Text("Select a date")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
             }
         }
     }
 
     private func calendarDay(_ day: Date) -> some View {
-        let event = FTCEvent.all.first { Calendar.current.isDate($0.date, inSameDayAs: day) }
+        let event = events.first { Calendar.current.isDate($0.date, inSameDayAs: day) }
         let isSelected = Calendar.current.isDate(day, inSameDayAs: selectedDate)
         let isToday = Calendar.current.isDateInToday(day)
         return Button {
@@ -238,19 +189,24 @@ struct FTCEventCalendarView: View {
         } label: {
             VStack(spacing: 3) {
                 Text(day.formatted(.dateTime.day()))
-                    .font(.system(.subheadline, design: .rounded, weight: isSelected || isToday ? .bold : .medium))
-                    .foregroundStyle(isSelected ? FTCBrand.midnight : .white)
-                Circle()
-                    .fill(event?.labelColor ?? .clear)
-                    .frame(width: 5, height: 5)
+                    .font(.subheadline.weight(isSelected || isToday ? .semibold : .regular))
+                    .foregroundStyle(Color.primary)
+                if event != nil {
+                    Image(systemName: "calendar")
+                        .font(.caption2)
+                        .foregroundStyle(Color.accentColor)
+                } else {
+                    Color.clear.frame(width: FTCDesign.space12, height: FTCDesign.space12)
+                }
             }
             .frame(maxWidth: .infinity)
-            .frame(height: 42)
+            .frame(minWidth: FTCDesign.minimumHitTarget, minHeight: FTCDesign.minimumHitTarget)
             .background {
                 if isSelected {
-                    RoundedRectangle(cornerRadius: 13).fill(FTCBrand.cyan)
+                    RoundedRectangle(cornerRadius: FTCDesign.controlRadius)
+                        .fill(isSelected ? Color.accentColor.opacity(0.12) : Color.clear)
                 } else if isToday {
-                    RoundedRectangle(cornerRadius: 13).stroke(FTCBrand.cyan.opacity(0.7), lineWidth: 1)
+                    RoundedRectangle(cornerRadius: FTCDesign.controlRadius).stroke(Color.accentColor, lineWidth: 1)
                 }
             }
         }
@@ -261,109 +217,104 @@ struct FTCEventCalendarView: View {
     @ViewBuilder
     private var selectedDaySection: some View {
         if !eventsOnSelectedDate.isEmpty {
-            VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: FTCDesign.space12) {
                 sectionTitle("Selected day", caption: selectedDate.formatted(date: .complete, time: .omitted))
-                ForEach(eventsOnSelectedDate) { event in
-                    eventCard(event, highlight: true)
+                ForEach(Array(eventsOnSelectedDate.enumerated()), id: \.element.id) { index, event in
+                    eventRow(event, highlight: true)
+                    if index < eventsOnSelectedDate.count - 1 {
+                        Divider()
+                    }
                 }
             }
         }
     }
 
     private var upcomingSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            sectionTitle("Coming up", caption: "Make every meet count")
+        VStack(alignment: .leading, spacing: FTCDesign.space12) {
+            sectionTitle("Coming up", caption: "Upcoming events")
             if upcomingEvents.isEmpty {
-                FTCBrandCard {
-                    Label("The 2026–27 schedule is complete.", systemImage: "checkmark.seal.fill")
-                        .foregroundStyle(FTCBrand.cyan)
-                }
+                ContentUnavailableView("No upcoming events", systemImage: "calendar",
+                                       description: Text("The saved event schedule has no future dates."))
             } else {
-                ForEach(upcomingEvents) { event in
-                    eventCard(event, highlight: event == upcomingEvents.first)
+                ForEach(Array(upcomingEvents.enumerated()), id: \.element.id) { index, event in
+                    eventRow(event, highlight: event == upcomingEvents.first)
+                    if index < upcomingEvents.count - 1 {
+                        Divider()
+                    }
                 }
             }
         }
     }
 
     private func sectionTitle(_ title: String, caption: String) -> some View {
-        VStack(alignment: .leading, spacing: 3) {
-            Text(title).font(.system(.title2, design: .rounded, weight: .bold))
-            Text(caption).font(.subheadline).foregroundStyle(.white.opacity(0.56))
+        VStack(alignment: .leading, spacing: FTCDesign.space4) {
+            Text(title).font(.title2.weight(.semibold))
+            Text(caption).font(.subheadline).foregroundStyle(.secondary)
         }
     }
 
-    private func eventCard(_ event: FTCEvent, highlight: Bool) -> some View {
+    private func eventRow(_ event: TeamEventRecord, highlight: Bool) -> some View {
         Button {
             selectedEvent = event
         } label: {
             HStack(spacing: 14) {
                 VStack(spacing: 2) {
-                    Text(event.date.formatted(.dateTime.month(.abbreviated)).uppercased())
-                        .font(.system(.caption2, design: .rounded, weight: .black))
-                        .tracking(0.7)
+                    Text(event.date.formatted(.dateTime.month(.abbreviated)))
+                        .font(.caption.weight(.semibold))
                     Text(event.date.formatted(.dateTime.day()))
-                        .font(.system(size: 25, weight: .bold, design: .rounded))
+                        .font(.title3.weight(.semibold).monospacedDigit())
                 }
-                .foregroundStyle(event.labelColor)
-                .frame(width: 54, height: 58)
-                .background(event.color.opacity(0.13), in: RoundedRectangle(cornerRadius: 16))
+                .foregroundStyle(Color.accentColor)
+                .frame(minWidth: FTCDesign.minimumHitTarget, minHeight: FTCDesign.minimumHitTarget)
 
                 VStack(alignment: .leading, spacing: 5) {
                     HStack(spacing: 6) {
                         Text(event.kind)
-                            .font(.system(.caption2, design: .rounded, weight: .bold))
-                            .tracking(0.8)
+                            .font(.caption.weight(.semibold))
                             .foregroundStyle(event.labelColor)
                         if highlight && event == upcomingEvents.first {
-                            Text("NEXT")
-                                .font(.system(.caption2, design: .rounded, weight: .black))
-                                .foregroundStyle(FTCBrand.midnight)
-                                .padding(.horizontal, 7)
-                                .padding(.vertical, 3)
-                                .background(FTCBrand.cyan, in: Capsule())
+                            Text("Next")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(.secondary)
                         }
                     }
-                    Text(event.title).font(.headline).foregroundStyle(.white)
+                    Text(event.title).font(.headline).foregroundStyle(.primary)
                     Label(event.venue, systemImage: "mappin.and.ellipse")
                         .font(.caption)
-                        .foregroundStyle(.white.opacity(0.62))
+                        .foregroundStyle(.secondary)
                         .lineLimit(1)
                 }
                 Spacer(minLength: 0)
                 Image(systemName: "chevron.right")
                     .font(.caption.weight(.bold))
-                    .foregroundStyle(.white.opacity(0.38))
+                    .foregroundStyle(.tertiary)
             }
-            .padding(14)
-            .background {
-                RoundedRectangle(cornerRadius: 22, style: .continuous)
-                    .fill(.ultraThinMaterial)
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 22, style: .continuous)
-                            .stroke(highlight ? event.color.opacity(0.42) : .white.opacity(0.08), lineWidth: 1)
-                    }
-            }
+            .padding(.vertical, FTCDesign.space12)
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .frame(minHeight: FTCDesign.minimumHitTarget)
+        .contextMenu {
+            Button {
+                selectedEvent = event
+            } label: {
+                Label("View event", systemImage: "calendar")
+            }
+        }
     }
 
     private func shiftMonth(by amount: Int) {
-        guard let candidate = Calendar.current.date(byAdding: .month, value: amount, to: monthStart),
-              let first = FTCEvent.all.first,
-              let last = FTCEvent.all.last,
-              let firstMonth = Calendar.current.dateInterval(of: .month, for: first.date)?.start,
-              let lastMonth = Calendar.current.dateInterval(of: .month, for: last.date)?.start,
-              candidate >= firstMonth, candidate <= lastMonth else { return }
+        guard let candidate = Calendar.current.date(byAdding: .month, value: amount, to: monthStart) else { return }
         displayedMonth = candidate
-        if let firstDay = Calendar.current.dateInterval(of: .month, for: candidate)?.start {
+        if !Calendar.current.isDate(selectedDate, equalTo: candidate, toGranularity: .month),
+           let firstDay = Calendar.current.dateInterval(of: .month, for: candidate)?.start {
             selectedDate = firstDay
         }
     }
 }
 
 private struct FTCEventDetailSheet: View {
-    let event: FTCEvent
+    let event: TeamEventRecord
     @Query(sort: \NotebookEntry.timestamp, order: .reverse) private var allEntries: [NotebookEntry]
     @State private var isCreatingNote = false
     @State private var entryToEdit: NotebookEntry?
@@ -374,17 +325,68 @@ private struct FTCEventDetailSheet: View {
 
     var body: some View {
         NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 20) {
-                    eventHero
-                    locationCard
-                    EventReadinessBoard(event: event)
-                    meetingNotebook
+            List {
+                Section("Event") {
+                    LabeledContent("Category", value: event.category)
+                    LabeledContent("Date", value: event.date.formatted(date: .complete, time: .omitted))
+                    LabeledContent("Time", value: event.time)
+                    if !event.details.isEmpty {
+                        Text(event.details)
+                    }
                 }
-                .padding(18)
+                Section("Location") {
+                    Label(event.venue, systemImage: "mappin.and.ellipse")
+                    if let address = event.addressText {
+                        Text(address)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                Section("Event readiness") {
+                    EventReadinessBoard(event: event)
+                }
+                Section("Meeting notebook") {
+                    if eventNotes.isEmpty {
+                        ContentUnavailableView("No meeting notes", systemImage: "book.closed",
+                                               description: Text("Add design decisions, test results, and next steps."))
+                    } else {
+                        ForEach(eventNotes) { entry in
+                            Button {
+                                entryToEdit = entry
+                            } label: {
+                                VStack(alignment: .leading, spacing: FTCDesign.space4) {
+                                    Text(entry.title)
+                                        .font(.body.weight(.semibold))
+                                        .foregroundStyle(.primary)
+                                    if !entry.content.isEmpty {
+                                        Text(entry.content)
+                                            .font(.subheadline)
+                                            .foregroundStyle(.secondary)
+                                            .lineLimit(3)
+                                    }
+                                    Text(entry.timestamp.formatted(date: .abbreviated, time: .shortened))
+                                        .font(.caption)
+                                        .foregroundStyle(.tertiary)
+                                }
+                            }
+                            .buttonStyle(.plain)
+                            .contextMenu {
+                                Button {
+                                    entryToEdit = entry
+                                } label: {
+                                    Label("Edit note", systemImage: "pencil")
+                                }
+                            }
+                        }
+                    }
+                    Button {
+                        isCreatingNote = true
+                    } label: {
+                        Label("Add meeting note", systemImage: "plus")
+                    }
+                }
             }
-            .background(FTCBrand.background.ignoresSafeArea())
-            .navigationTitle("Event details")
+            .listStyle(.insetGrouped)
+            .navigationTitle(event.title)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
@@ -403,135 +405,11 @@ private struct FTCEventDetailSheet: View {
     }
 
     @Environment(\.dismiss) private var dismiss
-
-    private var eventHero: some View {
-        FTCBrandCard {
-            VStack(alignment: .leading, spacing: 14) {
-                HStack {
-                    Label(event.kind, systemImage: event.symbol)
-                        .font(.system(.caption, design: .rounded, weight: .bold))
-                        .tracking(0.7)
-                        .foregroundStyle(event.labelColor)
-                    Spacer()
-                    Text(event.date.formatted(.dateTime.month(.abbreviated).day()))
-                        .font(.system(.title3, design: .rounded, weight: .black))
-                        .foregroundStyle(.white)
-                }
-                Text(event.title)
-                    .font(.system(.largeTitle, design: .rounded, weight: .bold))
-                    .foregroundStyle(.white)
-                Label(event.date.formatted(.dateTime.weekday(.wide).year()), systemImage: "calendar")
-                    .foregroundStyle(.white.opacity(0.78))
-                Label(event.time, systemImage: "clock")
-                    .foregroundStyle(.white.opacity(0.78))
-                if let detail = event.detail {
-                    Label(detail, systemImage: "info.circle.fill")
-                        .font(.subheadline)
-                        .foregroundStyle(FTCBrand.cyan)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-        }
-    }
-
-    private var locationCard: some View {
-        FTCBrandCard {
-            VStack(alignment: .leading, spacing: 8) {
-                Label("VENUE", systemImage: "mappin.and.ellipse")
-                    .font(.system(.caption, design: .rounded, weight: .bold))
-                    .tracking(0.8)
-                    .foregroundStyle(FTCBrand.cyan)
-                Text(event.venue).font(.headline).foregroundStyle(.white)
-                if let address = event.address {
-                    Text(address).font(.subheadline).foregroundStyle(.white.opacity(0.66))
-                }
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-        }
-    }
-
-    private var meetingNotebook: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(alignment: .firstTextBaseline) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Meeting notebook")
-                        .font(.system(.title2, design: .rounded, weight: .bold))
-                    Text("Design decisions, tests, results & next steps")
-                        .font(.caption)
-                        .foregroundStyle(.white.opacity(0.58))
-                }
-                Spacer()
-                Button {
-                    isCreatingNote = true
-                } label: {
-                    Image(systemName: "plus")
-                        .font(.headline.weight(.bold))
-                        .foregroundStyle(FTCBrand.midnight)
-                        .frame(width: 38, height: 38)
-                        .background(FTCBrand.cyan, in: Circle())
-                }
-                .accessibilityLabel("Add meeting note")
-            }
-
-            if eventNotes.isEmpty {
-                FTCBrandCard {
-                    VStack(spacing: 12) {
-                        Image(systemName: "book.closed")
-                            .font(.system(size: 30))
-                            .foregroundStyle(FTCBrand.cyan)
-                        Text("A clean page for this meet")
-                            .font(.headline)
-                        Text("No notes yet. Start the engineering record when your team is ready.")
-                            .font(.subheadline)
-                            .foregroundStyle(.white.opacity(0.62))
-                            .multilineTextAlignment(.center)
-                        Button("Start meeting notebook") { isCreatingNote = true }
-                            .buttonStyle(.borderedProminent)
-                            .tint(FTCBrand.blue)
-                    }
-                    .frame(maxWidth: .infinity)
-                }
-            } else {
-                ForEach(eventNotes) { entry in
-                    Button {
-                        entryToEdit = entry
-                    } label: {
-                        VStack(alignment: .leading, spacing: 7) {
-                            HStack {
-                                Text(entry.title).font(.headline).foregroundStyle(.white)
-                                Spacer()
-                                Image(systemName: "pencil").font(.caption).foregroundStyle(FTCBrand.cyan)
-                            }
-                            Text(entry.content.isEmpty ? "Tap to add your meeting record." : entry.content)
-                                .font(.subheadline)
-                                .foregroundStyle(.white.opacity(0.62))
-                                .lineLimit(3)
-                            Text(entry.timestamp.formatted(date: .abbreviated, time: .shortened))
-                                .font(.caption2)
-                                .foregroundStyle(.white.opacity(0.42))
-                        }
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(16)
-                        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 20))
-                    }
-                    .buttonStyle(.plain)
-                }
-                Button {
-                    isCreatingNote = true
-                } label: {
-                    Label("Add another entry", systemImage: "plus.circle.fill")
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(FTCBrand.cyan)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                }
-            }
-        }
-    }
 }
 
 private struct EventReadinessBoard: View {
-    let event: FTCEvent
+    let event: TeamEventRecord
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @AppStorage("eventReadiness.completedItems") private var completedRaw = ""
 
     private let tasks = [
@@ -562,46 +440,50 @@ private struct EventReadinessBoard: View {
     }
 
     var body: some View {
-        FTCBrandCard {
-            VStack(alignment: .leading, spacing: 15) {
-                HStack(alignment: .top) {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Label("EVENT READY", systemImage: "checkmark.shield.fill")
-                            .font(.system(.caption2, design: .rounded, weight: .black))
-                            .tracking(1)
-                            .foregroundStyle(FTCBrand.cyan)
-                        Text("Pit crew checklist")
-                            .font(.system(.title3, design: .rounded, weight: .bold))
-                            .foregroundStyle(.white)
-                    }
-                    Spacer()
-                    Text("\(completedCount)/\(tasks.count)")
-                        .font(.system(.title3, design: .rounded, weight: .bold).monospacedDigit())
-                        .foregroundStyle(completedCount == tasks.count ? FTCBrand.cyan : .white.opacity(0.72))
-                        .contentTransition(.numericText())
-                }
-
-                ProgressView(value: progress)
-                    .tint(completedCount == tasks.count ? FTCBrand.cyan : FTCBrand.blue)
-                    .animation(.spring(response: 0.35), value: completedCount)
-
-                VStack(spacing: 2) {
-                    ForEach(tasks, id: \.self) { task in
-                        readinessRow(task)
-                    }
-                }
-
-                if completedCount == tasks.count {
-                    Label("Pit-ready. Go make it count.", systemImage: "sparkles")
+        VStack(alignment: .leading, spacing: FTCDesign.space16) {
+            HStack(alignment: .top) {
+                VStack(alignment: .leading, spacing: FTCDesign.space4) {
+                    Label("Event checklist", systemImage: "checklist")
                         .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(FTCBrand.cyan)
-                        .frame(maxWidth: .infinity, alignment: .center)
-                        .padding(.top, 3)
-                        .transition(.scale.combined(with: .opacity))
+                        .foregroundStyle(.primary)
+                    Text("Pit crew checklist")
+                        .font(.headline)
+                }
+                Spacer()
+                Text("\(completedCount)/\(tasks.count)")
+                    .font(.body.weight(.semibold).monospacedDigit())
+                    .foregroundStyle(completedCount == tasks.count ? .green : .primary)
+                    .contentTransition(reduceMotion ? .identity : .numericText())
+            }
+
+            ProgressView(value: progress)
+                .tint(completedCount == tasks.count ? .green : Color.accentColor)
+                .animation(
+                    reduceMotion ? .easeOut(duration: 0.12) : .snappy(duration: 0.28),
+                    value: completedCount
+                )
+
+            VStack(spacing: FTCDesign.space4) {
+                ForEach(tasks, id: \.self) { task in
+                    readinessRow(task)
                 }
             }
+
+            if completedCount == tasks.count {
+                Label("All checklist items are complete", systemImage: "checkmark.circle.fill")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.green)
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .padding(.top, FTCDesign.space4)
+                    .transition(.opacity)
+            }
         }
-        .animation(.spring(response: 0.32, dampingFraction: 0.8), value: completedCount == tasks.count)
+        .padding(.vertical, FTCDesign.space8)
+        .animation(
+            reduceMotion ? .easeOut(duration: 0.12) : .snappy(duration: 0.28),
+            value: completedCount == tasks.count
+        )
+        .sensoryFeedback(.selection, trigger: completedCount)
     }
 
     private func readinessRow(_ task: String) -> some View {
@@ -618,17 +500,16 @@ private struct EventReadinessBoard: View {
         } label: {
             HStack(spacing: 12) {
                 Image(systemName: isComplete ? "checkmark.circle.fill" : "circle")
-                    .font(.system(size: 19, weight: .medium))
-                    .foregroundStyle(isComplete ? FTCBrand.cyan : .white.opacity(0.34))
-                    .contentTransition(.symbolEffect(.replace))
+                    .font(.body)
+                    .foregroundStyle(isComplete ? .green : .secondary)
                 Text(task)
                     .font(.subheadline)
-                    .foregroundStyle(isComplete ? .white.opacity(0.48) : .white.opacity(0.88))
-                    .strikethrough(isComplete, color: .white.opacity(0.34))
+                    .foregroundStyle(isComplete ? .secondary : .primary)
+                    .strikethrough(isComplete)
                     .multilineTextAlignment(.leading)
                 Spacer(minLength: 0)
             }
-            .frame(minHeight: 42)
+            .frame(minHeight: FTCDesign.minimumHitTarget)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -639,7 +520,7 @@ private struct EventReadinessBoard: View {
 }
 
 private struct MeetingNoteEditor: View {
-    let event: FTCEvent
+    let event: TeamEventRecord
     var existingEntry: NotebookEntry?
 
     @Environment(\.dismiss) private var dismiss
@@ -652,8 +533,10 @@ private struct MeetingNoteEditor: View {
     @State private var results = ""
     @State private var nextSteps = ""
     @State private var saveError: String?
+    @State private var pendingEntry: NotebookEntry?
+    @State private var isConfirmingDiscard = false
 
-    init(event: FTCEvent, existingEntry: NotebookEntry? = nil) {
+    init(event: TeamEventRecord, existingEntry: NotebookEntry? = nil) {
         self.event = event
         self.existingEntry = existingEntry
         _title = State(initialValue: existingEntry?.title ?? "\(event.title) — Engineering Notes")
@@ -677,24 +560,34 @@ private struct MeetingNoteEditor: View {
                 noteSection("Results & observations", prompt: "What worked? Record measurements and evidence…", text: $results)
                 noteSection("Next steps", prompt: "Action items, owners, and follow-up tests…", text: $nextSteps)
             }
-            .scrollContentBackground(.hidden)
-            .background(FTCBrand.background)
             .navigationTitle(existingEntry == nil ? "New Meeting Note" : "Edit Meeting Note")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
+                    Button("Cancel") {
+                        if pendingEntry == nil {
+                            dismiss()
+                        } else {
+                            isConfirmingDiscard = true
+                        }
+                    }
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") { save() }
                         .disabled(!canSave)
                 }
             }
+            .confirmationDialog("Discard this meeting note?", isPresented: $isConfirmingDiscard) {
+                Button("Discard note", role: .destructive, action: discardPendingEntry)
+                Button("Continue editing", role: .cancel) {}
+            }
+            .interactiveDismissDisabled(pendingEntry != nil)
             .alert("Couldn’t save meeting notes", isPresented: Binding(
                 get: { saveError != nil },
                 set: { if !$0 { saveError = nil } }
             )) {
-                Button("OK", role: .cancel) { saveError = nil }
+                Button("Retry", action: save)
+                Button("Continue editing", role: .cancel) { saveError = nil }
             } message: {
                 Text(saveError ?? "Please try again.")
             }
@@ -741,22 +634,25 @@ private struct MeetingNoteEditor: View {
 
         let entry: NotebookEntry
         if let existingEntry {
-            existingEntry.title = title.trimmingCharacters(in: .whitespacesAndNewlines)
-            existingEntry.content = content
-            existingEntry.timestamp = .now
-            if !existingEntry.tags.contains(event.notebookTag) {
-                existingEntry.tags.append(event.notebookTag)
-            }
-            if !existingEntry.tags.contains(event.notebookDisplayTag) {
-                existingEntry.tags.append(event.notebookDisplayTag)
-            }
             entry = existingEntry
+        } else if let pendingEntry {
+            entry = pendingEntry
         } else {
-            entry = NotebookEntry(authorID: author.id, authorName: author.name,
-                                  title: title.trimmingCharacters(in: .whitespacesAndNewlines),
-                                  content: content,
-                                  tags: ["Meeting Notes", event.notebookDisplayTag, event.notebookTag])
+            entry = NotebookEntry(authorID: author.id, authorName: author.name, title: "", content: "")
             context.insert(entry)
+            pendingEntry = entry
+        }
+        entry.title = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        entry.content = content
+        entry.timestamp = .now
+        if !entry.tags.contains("Meeting Notes") {
+            entry.tags.append("Meeting Notes")
+        }
+        if !entry.tags.contains(event.notebookTag) {
+            entry.tags.append(event.notebookTag)
+        }
+        if !entry.tags.contains(event.notebookDisplayTag) {
+            entry.tags.append(event.notebookDisplayTag)
         }
         do {
             try context.save()
@@ -765,6 +661,17 @@ private struct MeetingNoteEditor: View {
             saveError = error.localizedDescription
             return
         }
+        pendingEntry = nil
+        dismiss()
+    }
+
+    private func discardPendingEntry() {
+        guard let pendingEntry else {
+            dismiss()
+            return
+        }
+        context.delete(pendingEntry)
+        self.pendingEntry = nil
         dismiss()
     }
 
@@ -782,4 +689,28 @@ private struct MeetingNoteEditor: View {
         }
         return result
     }
+}
+
+#Preview("Season calendar · Light") {
+    let container = makePreviewContainer()
+    return FTCEventCalendarView()
+        .modelContainer(container)
+        .environment(TabRouter())
+        .preferredColorScheme(.light)
+}
+
+#Preview("Season calendar · Dark") {
+    let container = makePreviewContainer()
+    return FTCEventCalendarView()
+        .modelContainer(container)
+        .environment(TabRouter())
+        .preferredColorScheme(.dark)
+}
+
+#Preview("Season calendar · Accessibility") {
+    let container = makePreviewContainer()
+    return FTCEventCalendarView()
+        .modelContainer(container)
+        .environment(TabRouter())
+        .dynamicTypeSize(.accessibility5)
 }

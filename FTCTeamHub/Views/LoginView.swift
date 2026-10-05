@@ -7,11 +7,11 @@
 //
 
 import SwiftUI
-import UIKit
 import SwiftData
 
 struct LoginView: View {
     @Environment(AuthenticationManager.self) private var authManager
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Query private var teamSettingsList: [TeamSettings]
 
     private enum Mode {
@@ -30,25 +30,12 @@ struct LoginView: View {
     @State private var email = ""
     @State private var password = ""
     @State private var role: TeamRole = .builder
-    @State private var avatarColor: AvatarColor = .red
     @State private var passwordVisible = false
+    @State private var submitFeedbackCount = 0
     @FocusState private var focusedField: Field?
 
     private var isSigningUp: Bool {
         mode == .signUp
-    }
-
-    private var teamName: String {
-        let name = teamSettingsList.first?.teamName.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        return name.isEmpty ? "Wild Circuits" : name
-    }
-
-    private var teamNumber: Int {
-        teamSettingsList.first?.teamNumber ?? 24211
-    }
-
-    private var seasonName: String {
-        teamSettingsList.first?.seasonName ?? "2026–27"
     }
 
     private var isValid: Bool {
@@ -66,7 +53,9 @@ struct LoginView: View {
                     if isSigningUp {
                         profileFields
                             .padding(.top, 22)
-                            .transition(.move(edge: .top).combined(with: .opacity))
+                            .transition(
+                                reduceMotion ? .opacity : .move(edge: .top).combined(with: .opacity)
+                            )
                     }
                     if let error = authManager.errorMessage {
                         errorNotice(error)
@@ -88,30 +77,27 @@ struct LoginView: View {
             .background(Color(uiColor: .systemGroupedBackground).ignoresSafeArea())
             .scrollDismissesKeyboard(.interactively)
             .toolbar(.hidden, for: .navigationBar)
-            .tint(FTCBrand.orange)
-            .animation(.easeInOut(duration: 0.2), value: isSigningUp)
+            .tint(Color.accentColor)
+            .animation(
+                reduceMotion ? .easeOut(duration: 0.12) : .snappy(duration: 0.24),
+                value: isSigningUp
+            )
+            .sensoryFeedback(.impact(weight: .medium), trigger: submitFeedbackCount)
+            .sensoryFeedback(.error, trigger: authManager.errorMessage)
         }
     }
 
     private var identityHeader: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack(alignment: .center, spacing: 10) {
-                RoundedRectangle(cornerRadius: 1)
-                    .fill(FTCBrand.orange)
-                    .frame(width: 3, height: 27)
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(teamName.uppercased())
-                        .font(.system(size: 12, weight: .bold, design: .rounded))
-                        .tracking(1.1)
-                    Text("FIRST TECH CHALLENGE  /  TEAM \(teamNumber)")
-                        .font(.system(size: 9, weight: .medium, design: .monospaced))
-                        .tracking(0.15)
-                        .foregroundStyle(.secondary)
-                }
-                Spacer(minLength: 6)
-                Text(seasonName)
-                    .font(.system(size: 10, weight: .medium, design: .monospaced))
+        VStack(alignment: .leading, spacing: FTCDesign.space4) {
+            if let settings = teamSettingsList.first {
+                Text(settings.teamName)
+                    .font(.headline)
+                Text("First Tech Challenge · Team \(settings.teamNumber) · \(settings.seasonName)")
+                    .font(.subheadline)
                     .foregroundStyle(.secondary)
+            } else {
+                Text("Team account")
+                    .font(.headline)
             }
         }
     }
@@ -119,8 +105,7 @@ struct LoginView: View {
     private var welcomeHeading: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(isSigningUp ? "Create account" : "Sign in")
-                .font(.system(size: 34, weight: .bold))
-                .tracking(-1.1)
+                .font(.largeTitle.weight(.bold))
                 .foregroundStyle(.primary)
                 .fixedSize(horizontal: false, vertical: true)
             Text(isSigningUp
@@ -134,7 +119,7 @@ struct LoginView: View {
     }
 
     private var credentialFields: some View {
-        VStack(alignment: .leading, spacing: 20) {
+        VStack(alignment: .leading, spacing: FTCDesign.space20) {
             if isSigningUp {
                 labeledField("Full name", symbol: "person", field: .name) {
                     TextField("Your name", text: $name)
@@ -144,7 +129,7 @@ struct LoginView: View {
                         .focused($focusedField, equals: .name)
                         .onSubmit { focusedField = .email }
                 }
-                .transition(.move(edge: .top).combined(with: .opacity))
+                .transition(reduceMotion ? .opacity : .move(edge: .top).combined(with: .opacity))
             }
 
             labeledField("Email", symbol: "envelope", field: .email) {
@@ -215,11 +200,11 @@ struct LoginView: View {
             .padding(.horizontal, 14)
             .frame(minHeight: 54)
             .background(Color(uiColor: .secondarySystemGroupedBackground),
-                        in: RoundedRectangle(cornerRadius: 13, style: .continuous))
+                        in: RoundedRectangle(cornerRadius: FTCDesign.controlRadius, style: .continuous))
             .overlay {
-                RoundedRectangle(cornerRadius: 13, style: .continuous)
-                    .stroke(focusedField == field ? FTCBrand.accentText.opacity(0.7) : FTCBrand.line,
-                            lineWidth: focusedField == field ? 1.5 : 1)
+                RoundedRectangle(cornerRadius: FTCDesign.controlRadius, style: .continuous)
+                    .stroke(focusedField == field ? Color.accentColor : FTCDesign.separator,
+                            lineWidth: focusedField == field ? 2 : 1)
             }
         }
     }
@@ -250,24 +235,15 @@ struct LoginView: View {
                     .padding(.horizontal, 14)
                     .frame(minHeight: 52)
                     .background(Color(uiColor: .secondarySystemGroupedBackground),
-                                in: RoundedRectangle(cornerRadius: 13, style: .continuous))
+                                in: RoundedRectangle(cornerRadius: FTCDesign.controlRadius, style: .continuous))
                     .overlay {
-                        RoundedRectangle(cornerRadius: 13, style: .continuous)
-                            .stroke(FTCBrand.line, lineWidth: 1)
+                        RoundedRectangle(cornerRadius: FTCDesign.controlRadius, style: .continuous)
+                            .stroke(FTCDesign.separator, lineWidth: 1)
                     }
                 }
                 .accessibilityLabel("Team role, \(role.rawValue)")
             }
 
-            VStack(alignment: .leading, spacing: 7) {
-                Text("Member color")
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.primary)
-                Text("Shown next to your name across team lists and activity.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                FTCColorPicker(selection: $avatarColor)
-            }
         }
     }
 
@@ -277,18 +253,14 @@ struct LoginView: View {
                 .fixedSize(horizontal: false, vertical: true)
         } icon: {
             Image(systemName: "exclamationmark.circle.fill")
-                .foregroundStyle(FTCBrand.accentText)
+                .foregroundStyle(.red)
         }
         .font(.footnote)
         .foregroundStyle(.primary)
-        .padding(13)
+        .padding(FTCDesign.space12)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color(uiColor: .secondarySystemGroupedBackground),
-                    in: RoundedRectangle(cornerRadius: 13, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: 13, style: .continuous)
-                .stroke(FTCBrand.accentText.opacity(0.25), lineWidth: 1)
-        }
+        .background(FTCDesign.secondarySurface,
+                    in: RoundedRectangle(cornerRadius: FTCDesign.cardRadius, style: .continuous))
         .accessibilityElement(children: .combine)
     }
 
@@ -299,17 +271,10 @@ struct LoginView: View {
                     .font(.body.weight(.semibold))
                 Spacer()
                 Image(systemName: "arrow.right")
-                    .font(.subheadline.weight(.semibold))
-            }
-            .foregroundStyle(.white)
-            .padding(.horizontal, 18)
-            .frame(height: 56)
-            .background(FTCBrand.orange, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-            .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+            }.frame(minHeight: 56)
         }
-        .buttonStyle(PressableButtonStyle())
+        .buttonStyle(.borderedProminent)
         .disabled(!isValid)
-        .opacity(isValid ? 1 : 0.52)
         .accessibilityHint(isValid ? "" : "Enter a valid email and password to continue")
     }
 
@@ -323,7 +288,7 @@ struct LoginView: View {
                 mode = isSigningUp ? .signIn : .signUp
             }
             .fontWeight(.semibold)
-            .foregroundStyle(FTCBrand.accentText)
+            .foregroundStyle(Color.accentColor)
         }
         .font(.subheadline)
         .frame(maxWidth: .infinity)
@@ -332,7 +297,7 @@ struct LoginView: View {
     private var privacyNote: some View {
         VStack(spacing: 11) {
             Rectangle()
-                .fill(FTCBrand.line)
+                .fill(FTCDesign.separator)
                 .frame(height: 1)
             HStack(spacing: 6) {
                 Image(systemName: "iphone")
@@ -352,7 +317,7 @@ struct LoginView: View {
     private func submit() {
         guard isValid else { return }
         focusedField = nil
-        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+        submitFeedbackCount += 1
         switch mode {
         case .signIn:
             authManager.signIn(
@@ -365,17 +330,9 @@ struct LoginView: View {
                 email: email.trimmingCharacters(in: .whitespacesAndNewlines),
                 password: password,
                 role: role,
-                avatarColor: avatarColor
+                avatarColor: .red
             )
         }
-    }
-}
-
-private struct PressableButtonStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .scaleEffect(configuration.isPressed ? 0.985 : 1)
-            .animation(.easeOut(duration: 0.13), value: configuration.isPressed)
     }
 }
 

@@ -113,7 +113,7 @@ struct NotebookTabView: View {
                 if entries.isEmpty {
                     EmptyStateView(icon: "book.closed", title: "No notebook entries yet",
                                    subtitle: "Tap the pencil icon to add your first entry.",
-                                   tint: .purple, actionTitle: "New Entry") {
+                                   tint: .accentColor, actionTitle: "New Entry") {
                         isPresentingTemplatePicker = true
                     }
                 }
@@ -425,8 +425,8 @@ private struct NewNotebookEntrySheet: View {
     @State private var expansionHubs = 0
 
     @State private var imuChip = "BHI260AP"
-    @State private var logoFacing = "UP"
-    @State private var usbFacing = "FORWARD"
+    @State private var logoFacing = "Up"
+    @State private var usbFacing = "Forward"
     @State private var yawOffset = 0.0
     @State private var drift = 0.0
     @State private var calibrationNotes = ""
@@ -566,8 +566,8 @@ private struct EditNotebookEntrySheet: View {
 
         let imu = entry.imuLog
         _imuChip = State(initialValue: imu?.chip ?? "BHI260AP")
-        _imuLogoFacing = State(initialValue: imu?.logoFacingDirection ?? "UP")
-        _imuUsbFacing = State(initialValue: imu?.usbFacingDirection ?? "FORWARD")
+        _imuLogoFacing = State(initialValue: (imu?.logoFacingDirection ?? "Up").capitalized)
+        _imuUsbFacing = State(initialValue: (imu?.usbFacingDirection ?? "Forward").capitalized)
         _imuYawOffset = State(initialValue: imu?.yawOffsetDegrees ?? 0)
         _imuDrift = State(initialValue: imu?.driftOverTenMinDegrees ?? 0)
         _imuCalibrationNotes = State(initialValue: imu?.calibrationNotes ?? "")

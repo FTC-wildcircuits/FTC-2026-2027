@@ -8,7 +8,6 @@
 
 import SwiftUI
 import SwiftData
-import UIKit
 
 struct IdeasTabView: View {
     @Query(sort: \Idea.timestamp, order: .reverse) private var ideas: [Idea]
@@ -78,11 +77,11 @@ private struct IdeaRow: View {
             }
         }
         .padding(.vertical, 4)
+        .sensoryFeedback(.selection, trigger: idea.upvoteCount)
     }
 
     private func toggleUpvote() {
         guard let uid = authManager.currentUser?.id, let name = authManager.currentUser?.name else { return }
-        UIImpactFeedbackGenerator(style: .light).impactOccurred()
         if let index = idea.upvoterIDs.firstIndex(of: uid) {
             idea.upvoterIDs.remove(at: index)
         } else {
@@ -171,7 +170,6 @@ private struct IdeaDetailView: View {
         context.insert(event)
         syncService?.pushActivity(event)
 
-        UINotificationFeedbackGenerator().notificationOccurred(.success)
     }
 }
 

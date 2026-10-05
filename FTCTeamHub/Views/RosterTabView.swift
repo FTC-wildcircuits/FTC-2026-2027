@@ -15,118 +15,114 @@ struct RosterTabView: View {
     @Query(sort: \ActivityEvent.timestamp, order: .reverse) private var activity: [ActivityEvent]
     @State private var isPresentingProfile = false
 
-    private let columns = [GridItem(.adaptive(minimum: 160), spacing: 12)]
-
     var body: some View {
         NavigationStack {
-            ScrollView {
-                LazyVGrid(columns: columns, spacing: 12) {
-                    ForEach(users) { user in
-                        RosterCard(
-                            user: user,
-                            isCurrentUser: user.id == authManager.currentUser?.id,
-                            recentActivity: activity.first { $0.authorID == user.id }
-                        )
+            List {
+                Section("Members") {
+                    if users.isEmpty {
+                        ContentUnavailableView("No team members", systemImage: "person.2",
+                                               description: Text("Team members appear here after they create an account on this device."))
+                    } else if filteredUsers.isEmpty {
+                        ContentUnavailableView.search(text: searchText)
+                    } else {
+                        ForEach(filteredUsers) { user in
+                            RosterRow(
+                                user: user,
+                                isCurrentUser: user.id == authManager.currentUser?.id,
+                                recentActivity: activity.first { $0.authorID == user.id }
+                            )
+                        }
                     }
                 }
-                .padding()
-
                 if !activity.isEmpty {
-                    RecentActivitySection(events: Array(activity.prefix(10)))
-                        .padding(.horizontal)
-                        .padding(.bottom)
+                    Section("Recent activity") {
+                        ForEach(Array(activity.prefix(10))) { event in
+                            ActivityRow(event: event)
+                        }
+                    }
                 }
             }
-            .navigationTitle("Team Roster")
+            .listStyle(.insetGrouped)
+            .navigationTitle("Team")
+            .navigationBarTitleDisplayMode(.large)
+            .searchable(text: $searchText, prompt: "Search members")
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {
                     Button { isPresentingProfile = true } label: { Image(systemName: "person.crop.circle") }
+                        .frame(minWidth: FTCDesign.minimumHitTarget, minHeight: FTCDesign.minimumHitTarget)
+                        .accessibilityLabel("Profile")
                 }
             }
             .sheet(isPresented: $isPresentingProfile) { ProfileSheet() }
         }
     }
+
+    @State private var searchText = ""
+
+    private var filteredUsers: [AppUser] {
+        guard !searchText.isEmpty else { return users }
+        return users.filter { $0.name.localizedCaseInsensitiveContains(searchText) }
+    }
 }
 
-private struct RosterCard: View {
+private struct RosterRow: View {
     let user: AppUser
     let isCurrentUser: Bool
     let recentActivity: ActivityEvent?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Circle()
-                    .fill(user.avatarColor.color)
-                    .frame(width: 44, height: 44)
-                    .overlay(
-                        Text(user.initials)
-                            .font(.headline)
-                            .foregroundStyle(.white)
-                    )
-                Spacer()
-                if isCurrentUser {
-                    HStack(spacing: 4) {
-                        Circle().fill(.green).frame(width: 7, height: 7)
-                        Text("You").font(.caption2).foregroundStyle(.secondary)
-                    }
+        HStack(spacing: FTCDesign.space12) {
+            Circle()
+                .fill(user.avatarColor.color.opacity(0.18))
+                .frame(width: FTCDesign.minimumHitTarget, height: FTCDesign.minimumHitTarget)
+                .overlay {
+                    Text(user.initials)
+                        .font(.headline)
+                        .foregroundStyle(.primary)
+                }
+            VStack(alignment: .leading, spacing: FTCDesign.space4) {
+                Text(user.name)
+                    .font(.body.weight(.semibold))
+                    .lineLimit(1)
+                Label(user.role.rawValue, systemImage: user.role.systemImage)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                if let recentActivity {
+                    Text(recentActivity.message)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
                 }
             }
-
-            Text(user.name)
-                .font(.subheadline.weight(.semibold))
-                .lineLimit(1)
-
-            Label(user.role.rawValue, systemImage: user.role.systemImage)
-                .font(.caption2.weight(.medium))
-                .padding(.horizontal, 8).padding(.vertical, 3)
-                .background(.thinMaterial, in: Capsule())
-
-            if let recentActivity {
-                Text(recentActivity.message)
-                    .font(.caption2)
+            Spacer(minLength: FTCDesign.space8)
+            if isCurrentUser {
+                Text("You")
+                    .font(.subheadline)
                     .foregroundStyle(.secondary)
-                    .lineLimit(2)
             }
         }
-        .padding(12)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 12))
+        .padding(.vertical, FTCDesign.space4)
+        .accessibilityElement(children: .combine)
     }
 }
 
-private struct RecentActivitySection: View {
-    let events: [ActivityEvent]
+private struct ActivityRow: View {
+    let event: ActivityEvent
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Recent Activity")
-                .font(.headline)
-                .padding(.top, 8)
-
-            VStack(spacing: 0) {
-                ForEach(Array(events.enumerated()), id: \.element.id) { index, event in
-                    HStack(spacing: 10) {
-                        Image(systemName: event.systemImage)
-                            .foregroundStyle(Color.accentColor)
-                            .frame(width: 22)
-                        (Text(event.authorName).fontWeight(.semibold) + Text(" \(event.message)"))
-                            .font(.footnote)
-                        Spacer()
-                        Text(event.timestamp, style: .relative)
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                    }
-                    .padding(.vertical, 8)
-
-                    if index < events.count - 1 {
-                        Divider()
-                    }
-                }
+        HStack(alignment: .top, spacing: FTCDesign.space12) {
+            Image(systemName: event.systemImage)
+                .foregroundStyle(Color.accentColor)
+                .frame(minWidth: FTCDesign.minimumHitTarget, minHeight: FTCDesign.minimumHitTarget)
+            VStack(alignment: .leading, spacing: FTCDesign.space4) {
+                (Text(event.authorName).fontWeight(.semibold) + Text(" \(event.message)"))
+                    .font(.body)
+                Text(event.timestamp, style: .relative)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
             }
-            .padding(.horizontal, 12)
-            .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 12))
         }
+        .accessibilityElement(children: .combine)
     }
 }
 
@@ -159,10 +155,29 @@ private struct ProfileSheet: View {
     }
 }
 
-#Preview {
+#Preview("Team roster · Light") {
     let container = makePreviewContainer()
     let authManager = AuthenticationManager(modelContext: container.mainContext)
     return RosterTabView()
         .modelContainer(container)
         .environment(authManager)
+        .preferredColorScheme(.light)
+}
+
+#Preview("Team roster · Dark") {
+    let container = makePreviewContainer()
+    let authManager = AuthenticationManager(modelContext: container.mainContext)
+    return RosterTabView()
+        .modelContainer(container)
+        .environment(authManager)
+        .preferredColorScheme(.dark)
+}
+
+#Preview("Team roster · Accessibility") {
+    let container = makePreviewContainer()
+    let authManager = AuthenticationManager(modelContext: container.mainContext)
+    return RosterTabView()
+        .modelContainer(container)
+        .environment(authManager)
+        .dynamicTypeSize(.accessibility5)
 }

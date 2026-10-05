@@ -34,7 +34,7 @@ struct ScoringSimulatorView: View {
             if elements.isEmpty {
                 EmptyStateView(icon: "sum", title: "No scoring elements yet",
                                subtitle: "Add your season's scoring actions and point values to start calculating.",
-                               tint: .indigo, actionTitle: "Add Elements") { isPresentingManageElements = true }
+                               tint: .accentColor, actionTitle: "Add Elements") { isPresentingManageElements = true }
             } else {
                 List {
                     ForEach(ScoringPhase.allCases) { phase in
@@ -81,8 +81,8 @@ struct ScoringSimulatorView: View {
         HStack(spacing: 0) {
             VStack(spacing: 2) {
                 Text("Your Alliance").font(.caption).foregroundStyle(.secondary)
-                Text("\(yourTotal)").font(.system(size: 34, weight: .bold, design: .rounded).monospacedDigit())
-                    .foregroundStyle(.blue)
+                Text("\(yourTotal)").font(.title2.weight(.semibold).monospacedDigit())
+                    .foregroundStyle(Color.accentColor)
             }
             .frame(maxWidth: .infinity)
 
@@ -97,7 +97,7 @@ struct ScoringSimulatorView: View {
 
             VStack(spacing: 2) {
                 Text("Opponent").font(.caption).foregroundStyle(.secondary)
-                Text("\(opponentTotal)").font(.system(size: 34, weight: .bold, design: .rounded).monospacedDigit())
+                Text("\(opponentTotal)").font(.title2.weight(.semibold).monospacedDigit())
                     .foregroundStyle(.red)
             }
             .frame(maxWidth: .infinity)
@@ -121,7 +121,7 @@ private struct ScoringElementRow: View {
                     .font(.caption).foregroundStyle(.secondary)
             }
             HStack(spacing: 20) {
-                CounterControl(label: "Yours", value: $yourCount, tint: .blue)
+                CounterControl(label: "Yours", value: $yourCount, tint: .accentColor)
                 CounterControl(label: "Opp.", value: $opponentCount, tint: .red)
             }
         }
@@ -138,7 +138,6 @@ private struct CounterControl: View {
         HStack(spacing: 8) {
             Text(label).font(.caption2).foregroundStyle(.secondary).frame(width: 34, alignment: .leading)
             Button {
-                UIImpactFeedbackGenerator(style: .light).impactOccurred()
                 value = max(0, value - 1)
             } label: {
                 Image(systemName: "minus.circle.fill").foregroundStyle(tint.opacity(0.7))
@@ -146,13 +145,13 @@ private struct CounterControl: View {
             .buttonStyle(.plain)
             Text("\(value)").font(.subheadline.monospacedDigit().weight(.semibold)).frame(minWidth: 20)
             Button {
-                UIImpactFeedbackGenerator(style: .light).impactOccurred()
                 value += 1
             } label: {
                 Image(systemName: "plus.circle.fill").foregroundStyle(tint)
             }
             .buttonStyle(.plain)
         }
+        .sensoryFeedback(.selection, trigger: value)
     }
 }
 

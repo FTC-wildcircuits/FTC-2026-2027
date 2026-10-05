@@ -25,7 +25,7 @@ struct FTCTeamHubApp: App {
             TestRunRecord.self, Idea.self, ActivityEvent.self, TrackedTeam.self,
             Battery.self, ChecklistRun.self, InventoryItem.self,
             TeamSettings.self, Sponsor.self, BudgetExpense.self,
-            ScoringElement.self, ScoutingReport.self
+            ScoringElement.self, ScoutingReport.self, TeamEventRecord.self
         ])
         let config = ModelConfiguration(schema: schema, isStoredInMemoryOnly: inMemory)
         return try ModelContainer(for: schema, configurations: [config])
@@ -105,9 +105,9 @@ struct ContentView: View {
 
     @Environment(\.modelContext) private var modelContext
     @Environment(\.syncService) private var syncService
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var authManager: AuthenticationManager?
     @State private var launchError: String?
-    @AppStorage("com.ftcteamhub.clean-slate.2026-27") private var cleanSlateApplied = false
     @AppStorage("cloudSyncEnabled") private var cloudSyncEnabled = false
 
     var body: some View {
@@ -115,8 +115,8 @@ struct ContentView: View {
             if let launchError {
                 VStack(spacing: 16) {
                     Image(systemName: "exclamationmark.triangle.fill")
-                        .font(.system(size: 42))
-                        .foregroundStyle(FTCBrand.orange)
+                        .font(.largeTitle)
+                        .foregroundStyle(.orange)
                     Text("Workspace setup could not finish")
                         .font(.title2.bold())
                     Text(launchError)
@@ -144,7 +144,10 @@ struct ContentView: View {
                 FTCLoadingView()
             }
         }
-        .animation(.easeInOut(duration: 0.2), value: authManager?.currentUser?.id)
+        .animation(
+            reduceMotion ? .easeOut(duration: 0.12) : .snappy(duration: 0.24),
+            value: authManager?.currentUser?.id
+        )
         .safeAreaInset(edge: .top, spacing: 0) {
             if let persistenceWarning {
                 HStack(alignment: .top, spacing: 10) {
@@ -168,12 +171,15 @@ struct ContentView: View {
         }
         .onAppear(perform: prepareWorkspace)
         .onChange(of: cloudSyncEnabled) { _, enabled in
-            if enabled {
+            if enabled && persistenceWarning == nil {
                 syncService?.start(modelContext: modelContext)
                 authManager?.setSyncService(syncService)
             } else {
                 syncService?.stop()
                 authManager?.setSyncService(nil)
+                if enabled {
+                    cloudSyncEnabled = false
+                }
             }
         }
     }
@@ -183,11 +189,13 @@ struct ContentView: View {
         do {
             if persistenceWarning != nil {
                 cloudSyncEnabled = false
-            } else if !cleanSlateApplied {
-                cloudSyncEnabled = false
-                try DataResetManager.wipeAllLocalData(context: modelContext, includeRoster: true)
-                cleanSlateApplied = true
             }
+            let settingsDescriptor = FetchDescriptor<TeamSettings>()
+            if try modelContext.fetch(settingsDescriptor).isEmpty {
+                modelContext.insert(TeamSettings())
+                try modelContext.save()
+            }
+            try TeamEventSeeder.seedProvidedScheduleIfNeeded(in: modelContext)
             if cloudSyncEnabled {
                 syncService?.start(modelContext: modelContext)
                 try syncService?.syncLocalRecords(in: modelContext)

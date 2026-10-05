@@ -8,7 +8,6 @@
 
 import SwiftUI
 import SwiftData
-import UIKit
 
 struct LiveDataTabView: View {
     @Environment(\.ftcScoutAPI) private var api
@@ -71,6 +70,7 @@ private struct TeamSearchView: View {
     @State private var errorMessage: String?
     @State private var result: FTCTeamOPR?
     @State private var season = Calendar.current.component(.year, from: .now)
+    @State private var bookmarkFeedbackCount = 0
 
     private var isBookmarked: Bool {
         guard let result else { return false }
@@ -138,6 +138,7 @@ private struct TeamSearchView: View {
             }
         }
         .listStyle(.insetGrouped)
+        .sensoryFeedback(.success, trigger: bookmarkFeedbackCount)
     }
 
     private func search() async {
@@ -161,7 +162,7 @@ private struct TeamSearchView: View {
         let tracked = TrackedTeam(teamNumber: team.number, teamName: team.name,
                                    addedByID: currentUser.id, addedByName: currentUser.name)
         context.insert(tracked)
-        UINotificationFeedbackGenerator().notificationOccurred(.success)
+        bookmarkFeedbackCount += 1
     }
 }
 
@@ -176,9 +177,9 @@ struct OPRBreakdownView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            OPRBar(label: "Auto", value: team.autoOPR, maxValue: maxOPR, color: .blue)
-            OPRBar(label: "TeleOp", value: team.teleOpOPR, maxValue: maxOPR, color: .orange)
-            OPRBar(label: "Endgame", value: team.endgameOPR, maxValue: maxOPR, color: .purple)
+            OPRBar(label: "Auto", value: team.autoOPR, maxValue: maxOPR, color: .accentColor)
+            OPRBar(label: "TeleOp", value: team.teleOpOPR, maxValue: maxOPR, color: .accentColor)
+            OPRBar(label: "Endgame", value: team.endgameOPR, maxValue: maxOPR, color: .accentColor)
             Divider()
             HStack {
                 Text("Total OPR").font(.subheadline.weight(.semibold))
@@ -228,7 +229,7 @@ private struct BookmarkedTeamsView: View {
             if bookmarks.isEmpty {
                 EmptyStateView(icon: "bookmark", title: "No tracked teams",
                                subtitle: "Search a team and tap \"Track This Team\" to save it here.",
-                               tint: .blue)
+                               tint: .accentColor)
             }
             ForEach(bookmarks) { team in
                 NavigationLink {

@@ -1,80 +1,47 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!--
-  LaunchScreen.storyboard
-  FTCTeamHub
-
-  Restrained FTC Team Hub splash screen using static system assets.
-
-  IMPORTANT: launch screen storyboards cannot contain
-  userDefinedRuntimeAttributes (no runtime code is allowed to execute
-  before the app finishes launching) — that's what broke the previous
-  version. Every visual effect here is achieved with plain, static
-  Interface Builder attributes only.
-
-  NOTE: iOS caches the launch screen snapshot per-install. If you rebuild
-  and don't see this, fully delete the app from the simulator/device
-  first, then reinstall.
--->
 <document type="com.apple.InterfaceBuilder3.CocoaTouch.Storyboard.XIB" version="3.0" toolsVersion="23504" targetRuntime="iOS.CocoaTouch" propertyAccessControl="none" useAutolayout="YES" launchScreen="YES" useTraitCollections="YES" useSafeAreas="YES" colorMatched="YES">
-    <device id="retina6_1" orientation="portrait" appearance="light"/>
     <dependencies>
         <deployment identifier="iOS"/>
         <plugIn identifier="com.apple.InterfaceBuilder.IBCocoaTouchPlugin" version="23507"/>
+        <capability name="System colors in document resources" minToolsVersion="9.0"/>
     </dependencies>
     <scenes>
-        <scene sceneID="EHf-IW-A2E">
+        <scene sceneID="launch-scene">
             <objects>
-                <viewController id="01J-lp-oVM" sceneMemberID="viewController">
-                    <view key="view" contentMode="scaleToFill" id="Ze5-6b-2t3">
+                <viewController id="launch-controller" sceneMemberID="viewController">
+                    <view key="view" contentMode="scaleToFill" id="launch-view">
                         <rect key="frame" x="0.0" y="0.0" width="393" height="852"/>
                         <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
                         <subviews>
-                            <imageView opaque="NO" clipsSubviews="YES" userInteractionEnabled="NO" contentMode="scaleAspectFit" horizontalHuggingPriority="251" verticalHuggingPriority="251" translatesAutoresizingMaskIntoConstraints="NO" image="wrench.and.screwdriver.fill" catalog="system" id="badge-icon">
-                                <rect key="frame" x="146.5" y="320" width="100" height="100"/>
-                                <color key="tintColor" red="0.91" green="0.29" blue="0.12" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
+                            <imageView opaque="NO" clipsSubviews="YES" userInteractionEnabled="NO" contentMode="scaleAspectFit" translatesAutoresizingMaskIntoConstraints="NO" image="wrench.and.screwdriver" catalog="system" id="launch-icon">
+                                <rect key="frame" x="168.5" y="398" width="56" height="56"/>
+                                <color key="tintColor" systemColor="systemRedColor"/>
                                 <constraints>
-                                    <constraint firstAttribute="width" constant="100" id="icon-w"/>
-                                    <constraint firstAttribute="height" constant="100" id="icon-h"/>
+                                    <constraint firstAttribute="width" constant="56" id="icon-width"/>
+                                    <constraint firstAttribute="height" constant="56" id="icon-height"/>
                                 </constraints>
                             </imageView>
-                            <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="WILD CIRCUITS" textAlignment="center" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="lbl-title">
-                                <rect key="frame" x="46.5" y="436" width="300" height="34"/>
-                                <fontDescription key="fontDescription" type="system" weight="heavy" pointSize="27"/>
-                                <color key="textColor" red="0.035" green="0.055" blue="0.14" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
-                                <nil key="highlightedColor"/>
-                            </label>
-                            <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="FTC TEAM HUB     /     TEAM 24211" textAlignment="center" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="lbl-subtitle">
-                                <rect key="frame" x="46.5" y="474" width="300" height="16"/>
-                                <fontDescription key="fontDescription" type="system" weight="semibold" pointSize="12"/>
-                                <color key="textColor" red="0.42" green="0.45" blue="0.50" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
-                                <nil key="highlightedColor"/>
-                            </label>
-                            <view contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="accent-bar">
-                                <rect key="frame" x="160.5" y="504" width="72" height="4"/>
-                                <color key="backgroundColor" red="1" green="0.48" blue="0.20" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
-                                <constraints>
-                                    <constraint firstAttribute="width" constant="72" id="accent-w"/>
-                                    <constraint firstAttribute="height" constant="4" id="accent-h"/>
-                                </constraints>
-                            </view>
                         </subviews>
-                        <viewLayoutGuide key="safeArea" id="6Tk-OE-BBY"/>
-                        <color key="backgroundColor" red="0.95" green="0.94" blue="0.91" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
+                        <viewLayoutGuide key="safeArea" id="safe-area"/>
+                        <color key="backgroundColor" systemColor="systemBackgroundColor"/>
                         <constraints>
-                            <constraint firstItem="badge-icon" firstAttribute="centerX" secondItem="Ze5-6b-2t3" secondAttribute="centerX" id="c-badge-x"/>
-                            <constraint firstItem="badge-icon" firstAttribute="centerY" secondItem="Ze5-6b-2t3" secondAttribute="centerY" constant="-90" id="c-badge-y"/>
-                            <constraint firstItem="lbl-title" firstAttribute="centerX" secondItem="Ze5-6b-2t3" secondAttribute="centerX" id="c-title-x"/>
-                            <constraint firstItem="lbl-title" firstAttribute="top" secondItem="badge-icon" secondAttribute="bottom" constant="16" id="c-title-y"/>
-                            <constraint firstItem="lbl-subtitle" firstAttribute="centerX" secondItem="Ze5-6b-2t3" secondAttribute="centerX" id="c-sub-x"/>
-                            <constraint firstItem="lbl-subtitle" firstAttribute="top" secondItem="lbl-title" secondAttribute="bottom" constant="4" id="c-sub-y"/>
-                            <constraint firstItem="accent-bar" firstAttribute="centerX" secondItem="Ze5-6b-2t3" secondAttribute="centerX" id="c-accent-x"/>
-                            <constraint firstItem="accent-bar" firstAttribute="top" secondItem="lbl-subtitle" secondAttribute="bottom" constant="18" id="c-accent-y"/>
+                            <constraint firstItem="launch-icon" firstAttribute="centerX" secondItem="launch-view" secondAttribute="centerX" id="icon-center-x"/>
+                            <constraint firstItem="launch-icon" firstAttribute="centerY" secondItem="launch-view" secondAttribute="centerY" id="icon-center-y"/>
                         </constraints>
                     </view>
                 </viewController>
-                <placeholder placeholderIdentifier="IBFirstResponder" id="iYj-Kq-Ea1" userLabel="First Responder" sceneMemberID="firstResponder"/>
+                <placeholder placeholderIdentifier="IBFirstResponder" id="first-responder" userLabel="First Responder" sceneMemberID="firstResponder"/>
             </objects>
             <point key="canvasLocation" x="53" y="375"/>
         </scene>
     </scenes>
+    <resources>
+        <image name="wrench.and.screwdriver" catalog="system"/>
+        <systemColor name="systemBackgroundColor">
+            <color white="1.0" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
+        </systemColor>
+        <systemColor name="systemRedColor">
+            <color red="1.0" green="0.231" blue="0.188" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
+        </systemColor>
+    </resources>
 </document>

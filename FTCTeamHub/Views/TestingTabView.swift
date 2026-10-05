@@ -9,7 +9,6 @@
 import SwiftUI
 import SwiftData
 import Charts
-import UIKit
 
 struct TestingTabView: View {
     @Query(sort: \AppUser.name) private var users: [AppUser]
@@ -62,9 +61,9 @@ private struct TestLogForm: View {
     @State private var autoConsistency = 80.0
     @State private var selectedIssues: Set<String> = []
     @State private var notes = ""
+    @State private var testRunFeedbackCount = 0
 
     private let commonIssues = ["Intake Jam", "Belt Slipped", "Code Crash", "Sensor Drift", "Battery Died", "Odometry Slip"]
-    private let haptics = UIImpactFeedbackGenerator(style: .light)
 
     var body: some View {
         Form {
@@ -84,9 +83,9 @@ private struct TestLogForm: View {
             }
 
             Section("Scores") {
-                LargeStepperRow(label: "Auto Score", value: $autoScore, haptics: haptics)
-                LargeStepperRow(label: "TeleOp Score", value: $teleopScore, haptics: haptics)
-                LargeStepperRow(label: "Endgame Score", value: $endgameScore, haptics: haptics)
+                LargeStepperRow(label: "Auto score", value: $autoScore)
+                LargeStepperRow(label: "TeleOp score", value: $teleopScore)
+                LargeStepperRow(label: "Endgame score", value: $endgameScore)
             }
 
             Section("Consistency") {
@@ -104,7 +103,7 @@ private struct TestLogForm: View {
                 }
             }
 
-            Section("Failures Observed") {
+            Section("Failures observed") {
                 IssueChipGrid(options: commonIssues, selected: $selectedIssues)
             }
 
@@ -116,7 +115,7 @@ private struct TestLogForm: View {
                 Button {
                     submit()
                 } label: {
-                    Text("Log Test Run")
+                    Text("Log test run")
                         .frame(maxWidth: .infinity)
                         .fontWeight(.semibold)
                 }
@@ -124,6 +123,7 @@ private struct TestLogForm: View {
                 .disabled(selectedDriverID == nil)
             }
         }
+        .sensoryFeedback(.success, trigger: testRunFeedbackCount)
     }
 
     private func submit() {
@@ -149,7 +149,7 @@ private struct TestLogForm: View {
         context.insert(event)
         syncService?.pushActivity(event)
 
-        UINotificationFeedbackGenerator().notificationOccurred(.success)
+        testRunFeedbackCount += 1
         autoScore = 0; teleopScore = 0; endgameScore = 0
         cycleTime = 0; autoConsistency = 80; selectedIssues = []; notes = ""
     }
@@ -158,17 +158,15 @@ private struct TestLogForm: View {
 private struct LargeStepperRow: View {
     let label: String
     @Binding var value: Int
-    let haptics: UIImpactFeedbackGenerator
 
     var body: some View {
         HStack {
             Text(label)
             Spacer()
             Button {
-                haptics.impactOccurred()
                 value = max(0, value - 1)
             } label: {
-                Image(systemName: "minus.circle.fill").font(.system(size: 28))
+                Image(systemName: "minus.circle.fill").font(.title2)
             }
             .buttonStyle(.plain)
 
@@ -177,11 +175,11 @@ private struct LargeStepperRow: View {
                 .frame(minWidth: 32)
 
             Button {
-                haptics.impactOccurred()
                 value += 1
             } label: {
-                Image(systemName: "plus.circle.fill").font(.system(size: 28))
+                Image(systemName: "plus.circle.fill").font(.title2)
             }
+            .sensoryFeedback(.selection, trigger: value)
             .buttonStyle(.plain)
         }
     }
@@ -206,10 +204,10 @@ private struct IssueChipGrid: View {
                         .padding(.horizontal, 10).padding(.vertical, 6)
                         .frame(maxWidth: .infinity)
                         .background(
-                            selected.contains(option) ? Color.accentColor : Color(.tertiarySystemFill),
-                            in: Capsule()
+                            selected.contains(option) ? Color.accentColor.opacity(0.12) : Color(uiColor: .tertiarySystemFill),
+                            in: RoundedRectangle(cornerRadius: FTCDesign.controlRadius, style: .continuous)
                         )
-                        .foregroundStyle(selected.contains(option) ? .white : .primary)
+                        .foregroundStyle(.primary)
                 }
                 .buttonStyle(.plain)
             }
@@ -229,7 +227,7 @@ private struct TestingAnalyticsView: View {
             if records.isEmpty {
                 EmptyStateView(icon: "chart.line.uptrend.xyaxis", title: "No test runs yet",
                                subtitle: "Log a practice run to start tracking your robot's progress.",
-                               tint: .blue)
+                               tint: .accentColor)
             } else {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 20) {
@@ -277,7 +275,7 @@ private struct TestingAnalyticsView: View {
                         Button {
                             exportURL = TestRunCSVExporter.writeTempFile(records: records)
                         } label: {
-                            Label("Export All Runs as CSV", systemImage: "tablecells")
+                            Label("Export all runs as CSV", systemImage: "tablecells")
                                 .frame(maxWidth: .infinity)
                         }
                         .buttonStyle(.borderedProminent)

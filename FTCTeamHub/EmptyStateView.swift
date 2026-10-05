@@ -24,7 +24,7 @@ struct EmptyStateView: View {
                     .fill(tint.opacity(0.12))
                     .frame(width: 88, height: 88)
                 Image(systemName: icon)
-                    .font(.system(size: 34, weight: .medium))
+                    .font(.largeTitle.weight(.medium))
                     .foregroundStyle(tint)
             }
 
@@ -53,6 +53,6 @@ struct EmptyStateView: View {
 
 #Preview {
     EmptyStateView(icon: "checkmark.circle", title: "All caught up",
-                   subtitle: "No open tasks assigned to you.", tint: .blue,
+                   subtitle: "No open tasks assigned to you.", tint: .accentColor,
                    actionTitle: "Add a Task", action: {})
 }

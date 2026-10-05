@@ -15,6 +15,7 @@ import UIKit
 /// Thin UIKit bridge around VisionKit's live QR scanner.
 private struct DataScannerRepresentable: UIViewControllerRepresentable {
     let onScan: (String) -> Void
+    let onStartError: (String) -> Void
 
     func makeUIViewController(context: Context) -> DataScannerViewController {
         let controller = DataScannerViewController(
@@ -26,7 +27,11 @@ private struct DataScannerRepresentable: UIViewControllerRepresentable {
             isHighlightingEnabled: true
         )
         controller.delegate = context.coordinator
-        try? controller.startScanning()
+        do {
+            try controller.startScanning()
+        } catch {
+            onStartError(error.localizedDescription)
+        }
         return controller
     }
 
@@ -65,16 +70,20 @@ struct QRCheckInOutView: View {
     var body: some View {
         ZStack {
             if isCameraAvailable {
-                DataScannerRepresentable(onScan: handleScan)
+                DataScannerRepresentable(onScan: handleScan) { error in
+                    scanErrorMessage = "The scanner could not start: \(error)"
+                }
                     .ignoresSafeArea()
             } else {
-                Color.black.ignoresSafeArea()
+                FTCDesign.groupedBackground.ignoresSafeArea()
                 VStack(spacing: 12) {
                     Image(systemName: "camera.metering.unknown")
-                        .font(.system(size: 40))
-                        .foregroundStyle(.white)
-                    Text("Camera scanning isn't available on this device.")
-                        .foregroundStyle(.white)
+                        .font(.largeTitle)
+                        .foregroundStyle(.secondary)
+                    Text(DataScannerViewController.isSupported
+                         ? "Camera access is unavailable. Check camera permissions in Settings."
+                         : "This device doesn't support live camera scanning.")
+                        .foregroundStyle(.primary)
                         .multilineTextAlignment(.center)
                         .padding(.horizontal, 40)
                 }
@@ -86,8 +95,11 @@ struct QRCheckInOutView: View {
                         dismiss()
                     } label: {
                         Image(systemName: "xmark.circle.fill")
-                            .font(.title)
-                            .foregroundStyle(.white, Color.black.opacity(0.6))
+                            .font(.title2)
+                            .foregroundStyle(.primary)
+                            .padding(FTCDesign.space8)
+                            .background(.regularMaterial, in: Circle())
+                            .frame(minWidth: FTCDesign.minimumHitTarget, minHeight: FTCDesign.minimumHitTarget)
                     }
                     Spacer()
                 }
@@ -97,9 +109,9 @@ struct QRCheckInOutView: View {
                 if let scanErrorMessage {
                     Text(scanErrorMessage)
                         .font(.footnote)
-                        .foregroundStyle(.white)
+                        .foregroundStyle(.red)
                         .padding(10)
-                        .background(.red.opacity(0.85), in: RoundedRectangle(cornerRadius: 10))
+                        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: FTCDesign.controlRadius))
                         .padding(.bottom, 8)
                 }
             }
@@ -131,9 +143,11 @@ struct QRCheckInOutView: View {
                 }
                 .padding()
                 .frame(maxWidth: 320)
-                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 18))
+                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: FTCDesign.cardRadius, style: .continuous))
                 .padding(.bottom, 40)
             }
+            .sensoryFeedback(.success, trigger: scannedItem?.id)
+            .sensoryFeedback(.error, trigger: scanErrorMessage)
         }
     }
 
@@ -148,14 +162,12 @@ struct QRCheckInOutView: View {
             return
         }
         scanErrorMessage = nil
-        UINotificationFeedbackGenerator().notificationOccurred(.success)
         scannedItem = item
     }
 
     private func toggleCheckout(_ item: InventoryItem) {
         guard let user = authManager.currentUser else { return }
         guard item.isCheckedOut || (item.quantity > 0 && !item.needsMaintenance) else { return }
-        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
         item.isCheckedOut.toggle()
         item.checkedOutByName = item.isCheckedOut ? user.name : ""
         syncService?.pushInventoryItem(item)

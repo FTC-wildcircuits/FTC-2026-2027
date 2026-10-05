@@ -98,7 +98,7 @@ private struct BatteryRow: View {
     private var statusColor: Color {
         switch battery.status {
         case .charged: return .green
-        case .inUse: return .blue
+        case .inUse: return .secondary
         case .charging: return .orange
         case .dead: return .red
         }
@@ -120,18 +120,19 @@ private struct BatteryRow: View {
                     Button(status.rawValue) { setStatus(status) }
                 }
             } label: {
-                Text(battery.status.rawValue)
-                    .font(.caption.weight(.medium))
-                    .padding(.horizontal, 10).padding(.vertical, 5)
-                    .background(statusColor.opacity(0.15), in: Capsule())
-                    .foregroundStyle(statusColor)
+                FTCStateChip(
+                    title: battery.status.rawValue,
+                    systemImage: battery.status.systemImage,
+                    tint: statusColor
+                )
             }
+            .accessibilityLabel("Battery status: \(battery.status.rawValue)")
         }
         .padding(.vertical, 2)
+        .sensoryFeedback(.selection, trigger: battery.status)
     }
 
     private func setStatus(_ status: BatteryStatus) {
-        UIImpactFeedbackGenerator(style: .light).impactOccurred()
         battery.status = status
         if status == .charged { battery.lastChargedAt = .now }
         if status == .inUse { battery.cycleCount += 1 }
@@ -282,7 +283,6 @@ private struct ChecklistRunSheet: View {
                 ForEach(Array(type.defaultItems.enumerated()), id: \.offset) { index, item in
                     Button {
                         checkedStates[index].toggle()
-                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
                     } label: {
                         HStack {
                             Image(systemName: checkedStates[index] ? "checkmark.square.fill" : "square")
@@ -309,6 +309,8 @@ private struct ChecklistRunSheet: View {
                         .background(.thinMaterial)
                 }
             }
+            .sensoryFeedback(.selection, trigger: checkedStates)
+            .sensoryFeedback(.success, trigger: allChecked)
         }
     }
 
@@ -324,7 +326,6 @@ private struct ChecklistRunSheet: View {
         context.insert(event)
         syncService?.pushActivity(event)
 
-        UINotificationFeedbackGenerator().notificationOccurred(allChecked ? .success : .warning)
         dismiss()
     }
 }
@@ -379,9 +380,9 @@ private struct InventoryListView: View {
                 Section {
                     HStack(spacing: 14) {
                         Label("\(lowStockCount) low", systemImage: "exclamationmark.triangle.fill")
-                            .foregroundStyle(lowStockCount == 0 ? Color.gray : Color.orange)
+                            .foregroundStyle(lowStockCount == 0 ? Color.secondary : Color.orange)
                         Label("\(maintenanceCount) repair", systemImage: "wrench.and.screwdriver.fill")
-                            .foregroundStyle(maintenanceCount == 0 ? Color.gray : Color.red)
+                            .foregroundStyle(maintenanceCount == 0 ? Color.secondary : Color.red)
                     }
                     .font(.caption.weight(.medium))
                 }
@@ -459,11 +460,7 @@ private struct InventoryRow: View {
             }
             Spacer()
             if item.isCheckedOut {
-                Text("Checked out")
-                    .font(.caption2.weight(.medium))
-                    .padding(.horizontal, 8).padding(.vertical, 3)
-                    .background(.orange.opacity(0.15), in: Capsule())
-                    .foregroundStyle(.orange)
+                FTCStateChip(title: "Checked out", systemImage: "arrow.up.right", tint: .orange)
             }
         }
         .padding(.vertical, 2)
@@ -529,6 +526,8 @@ private struct InventoryDetailView: View {
             }
         }
         .navigationTitle(item.name)
+        .sensoryFeedback(.selection, trigger: item.isCheckedOut)
+        .sensoryFeedback(.warning, trigger: item.needsMaintenance)
         .sheet(isPresented: $isPresentingEdit) {
             NewInventoryItemSheet(item: item)
         }
@@ -542,7 +541,6 @@ private struct InventoryDetailView: View {
 
     private func toggleCheckout() {
         guard let user = authManager.currentUser else { return }
-        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
         item.isCheckedOut.toggle()
         item.checkedOutByName = item.isCheckedOut ? user.name : ""
         syncService?.pushInventoryItem(item)

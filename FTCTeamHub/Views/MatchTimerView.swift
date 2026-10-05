@@ -10,16 +10,15 @@
 //
 
 import SwiftUI
-import UIKit
 
 struct MatchTimerView: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     private let totalDuration = 150
     private let autoEnd = 30
     private let endgameStart = 120
 
     @State private var elapsedSeconds = 0
     @State private var isRunning = false
-    @State private var lastAnnouncedPhase: Phase = .notStarted
 
     private let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
@@ -40,7 +39,7 @@ struct MatchTimerView: View {
             switch self {
             case .notStarted: return .secondary
             case .autonomous: return .orange
-            case .teleop: return .blue
+            case .teleop: return .secondary
             case .endgame: return .red
             case .complete: return .green
             }
@@ -88,9 +87,9 @@ struct MatchTimerView: View {
                 .foregroundStyle(currentPhase.color)
 
             Text(timeString(remaining))
-                .font(.system(size: 72, weight: .bold, design: .rounded).monospacedDigit())
+                .font(.largeTitle.weight(.bold).monospacedDigit())
                 .foregroundStyle(.primary)
-                .contentTransition(.numericText())
+                .contentTransition(reduceMotion ? .identity : .numericText())
 
             PhaseProgressBar(elapsedSeconds: elapsedSeconds, autoEnd: autoEnd, endgameStart: endgameStart, total: totalDuration)
                 .frame(height: 10)
@@ -134,37 +133,17 @@ struct MatchTimerView: View {
         .onReceive(timer) { _ in
             guard isRunning, elapsedSeconds < totalDuration else { return }
             elapsedSeconds += 1
-            let newPhase = phase(at: elapsedSeconds)
-            if newPhase != lastAnnouncedPhase {
-                lastAnnouncedPhase = newPhase
-                announce(newPhase)
-            }
         }
+        .sensoryFeedback(.selection, trigger: currentPhase)
     }
 
     private func toggleRunning() {
-        if !isRunning && elapsedSeconds == 0 {
-            lastAnnouncedPhase = .autonomous
-            UIImpactFeedbackGenerator(style: .heavy).impactOccurred()
-        }
         isRunning.toggle()
     }
 
     private func reset() {
         isRunning = false
         elapsedSeconds = 0
-        lastAnnouncedPhase = .notStarted
-    }
-
-    private func announce(_ phase: Phase) {
-        switch phase {
-        case .teleop, .endgame:
-            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-        case .complete:
-            UINotificationFeedbackGenerator().notificationOccurred(.success)
-        default:
-            break
-        }
     }
 
     private func timeString(_ seconds: Int) -> String {
@@ -183,7 +162,7 @@ private struct PhaseProgressBar: View {
             ZStack(alignment: .leading) {
                 HStack(spacing: 2) {
                     Capsule().fill(Color.orange.opacity(0.25)).frame(width: geo.size.width * CGFloat(autoEnd) / CGFloat(total))
-                    Capsule().fill(Color.blue.opacity(0.25)).frame(width: geo.size.width * CGFloat(endgameStart - autoEnd) / CGFloat(total))
+                    Capsule().fill(Color.accentColor.opacity(0.25)).frame(width: geo.size.width * CGFloat(endgameStart - autoEnd) / CGFloat(total))
                     Capsule().fill(Color.red.opacity(0.25)).frame(width: geo.size.width * CGFloat(total - endgameStart) / CGFloat(total))
                 }
                 Capsule()
